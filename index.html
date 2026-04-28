@@ -298,7 +298,6 @@
 <div class="tabs-nav">
   <button class="tab-btn active" data-tab="dashboard"  onclick="switchTab('dashboard')">📊 Dashboard</button>
   <button class="tab-btn"        data-tab="setup"       onclick="switchTab('setup')">⚙️ Project Setup</button>
-  <button class="tab-btn"        data-tab="proposal"    onclick="switchTab('proposal')">📄 Proposal Builder</button>
   <button class="tab-btn"        data-tab="milestones"  onclick="switchTab('milestones')">🗂 Plan</button>
   <button class="tab-btn"        data-tab="launch"      onclick="switchTab('launch')">🚀 Launch Checklist</button>
   <button class="tab-btn"        data-tab="meetings"    onclick="switchTab('meetings')">📝 Meeting Notes</button>
@@ -307,6 +306,7 @@
   <button class="tab-btn"        data-tab="budget"      onclick="switchTab('budget')">💰 Budget</button>
   <button class="tab-btn"        data-tab="digests"     onclick="switchTab('digests')">📧 Digests & Briefs</button>
   <button class="tab-btn"        data-tab="links"       onclick="switchTab('links')">🔗 Links</button>
+  <button class="tab-btn"        data-tab="proposal"    onclick="switchTab('proposal')">📄 Proposal Builder</button>
 </div>
 
 <!-- ===================== DASHBOARD ===================== -->
@@ -386,6 +386,17 @@
       <div class="card-body" id="dashUpcoming"></div>
     </div>
 
+    <!-- Next Meeting -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📅 Next Meeting</div>
+        <button class="btn btn-sm btn-secondary" onclick="switchTab('meetings')">Meeting Notes →</button>
+      </div>
+      <div class="card-body" id="dashNextMeeting">
+        <span style="color:var(--text-secondary);font-size:13px;">No next meeting set — add one in Meeting Notes.</span>
+      </div>
+    </div>
+
     <!-- Launch checklist progress -->
     <div class="card">
       <div class="card-header">
@@ -454,6 +465,7 @@
       <button class="btn btn-teal" onclick="openPasteProposalModal()" title="Paste an existing proposal and auto-fill the form">📋 Paste Existing Proposal</button>
       <button class="btn btn-secondary" onclick="openGoogleDriveImport()">📎 Import from Google Drive</button>
       <button class="btn btn-secondary" onclick="document.getElementById('uploadSection').scrollIntoView({behavior:'smooth'})">⬆ Upload a Doc</button>
+      <button class="btn btn-secondary" onclick="sendProposalReferenceEmail()" title="Email this proposal to all shared stakeholders as a project reference">📧 Send for Reference</button>
     </div>
   </div>
 
@@ -700,6 +712,83 @@
 
 <!-- ===================== MEETINGS ===================== -->
 <div id="tab-meetings" class="tab-content">
+
+  <!-- Top row: Next Meeting + Slack -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+
+    <!-- NEXT MEETING & CALENDAR -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📅 Next Meeting</div>
+        <button class="btn btn-sm btn-secondary" onclick="openNewMeetingModal()">＋ Log Notes</button>
+      </div>
+      <div class="card-body">
+        <div class="form-group" style="margin-bottom:10px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);">Meeting Title</label>
+          <input type="text" id="nextMeetingTitle" class="form-input" placeholder="e.g. Weekly Sync" style="font-size:13px;" oninput="saveNextMeeting()">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);">Date</label>
+            <input type="date" id="nextMeetingDate" class="form-input" style="font-size:13px;" oninput="saveNextMeeting()">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);">Time</label>
+            <input type="time" id="nextMeetingTime" class="form-input" style="font-size:13px;" oninput="saveNextMeeting()">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);">Calendar Link (Google / Outlook)</label>
+          <div style="display:flex;gap:6px;">
+            <input type="url" id="calendarUrl" class="form-input" placeholder="Paste Google Calendar or Outlook event link..." style="font-size:13px;flex:1;" oninput="saveNextMeeting()">
+            <button class="btn btn-sm btn-secondary" onclick="openCalendarLink()" title="Open calendar link">↗</button>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);">Agenda / Topics</label>
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <input type="text" id="newMeetingTopic" class="form-input" placeholder="Add a topic or agenda item..." style="font-size:13px;flex:1;"
+              onkeydown="if(event.key==='Enter'){addMeetingTopic();event.preventDefault();}">
+            <button class="btn btn-sm btn-primary" onclick="addMeetingTopic()">＋</button>
+          </div>
+          <div id="meetingTopicsList" style="max-height:140px;overflow-y:auto;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLACK CHANNEL -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">💬 Slack Channel</div>
+        <button class="btn btn-sm btn-secondary" id="openSlackBtn" onclick="openSlackChannel()" style="display:none;">Open Channel ↗</button>
+      </div>
+      <div class="card-body">
+        <div class="form-group" style="margin-bottom:10px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);">Channel Name</label>
+          <input type="text" id="slackChannelName" class="form-input" placeholder="e.g. #proj-bookkeeping-launch" style="font-size:13px;" oninput="saveSlackChannel()">
+        </div>
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);">Channel Link</label>
+          <div style="display:flex;gap:6px;">
+            <input type="url" id="slackChannelUrl" class="form-input" placeholder="https://app.slack.com/client/..." style="font-size:13px;flex:1;" oninput="saveSlackChannel()">
+            <button class="btn btn-sm btn-secondary" onclick="openSlackChannel()" title="Open in Slack">↗</button>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:10px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);display:block;margin-bottom:6px;">Updates &amp; Key Messages</label>
+          <div style="display:flex;gap:6px;margin-bottom:8px;">
+            <input type="text" id="newSlackUpdate" class="form-input" placeholder="Log an update, decision, or link from Slack..." style="font-size:13px;flex:1;"
+              onkeydown="if(event.key==='Enter'){addSlackUpdate();event.preventDefault();}">
+            <button class="btn btn-sm btn-primary" onclick="addSlackUpdate()">＋</button>
+          </div>
+          <div id="slackUpdatesList" style="max-height:180px;overflow-y:auto;"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Meeting Notes list -->
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
     <h2 style="font-size:16px;font-weight:700;color:var(--gray-dark);">📝 Meeting Notes</h2>
     <button class="btn btn-primary" onclick="openNewMeetingModal()">＋ Add Meeting</button>
@@ -1256,6 +1345,19 @@
         <div class="form-group">
           <label>Project Description / Objective</label>
           <textarea id="wDesc" rows="3" placeholder="What is the goal of this project? What does success look like?"></textarea>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:10px;">💬 Slack Channel <span style="font-weight:400;opacity:.7;">(optional)</span></div>
+          <div class="form-row" style="gap:10px;">
+            <div class="form-group" style="flex:1;margin-bottom:0;">
+              <label>Channel Name</label>
+              <input type="text" id="wSlackName" placeholder="e.g. #proj-bookkeeping-launch">
+            </div>
+            <div class="form-group" style="flex:2;margin-bottom:0;">
+              <label>Channel Link</label>
+              <input type="url" id="wSlackUrl" placeholder="https://app.slack.com/client/...">
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2209,12 +2311,226 @@ let project = {
   actionItems: [],
   budget: { totalBudget: '', currency: 'USD', contingency: '', items: [] },
   ragStatus: { status: 'Green', reason: '', updatedAt: '', updatedBy: '' },
+  slackChannel: { name: '', url: '', updates: [] },
+  nextMeeting: { title: '', date: '', time: '', calendarUrl: '', topics: [] },
 };
 let wizardStep = 1;
 let taskIdCounter = 1;
 let riskIdCounter = 1;
 let meetingIdCounter = 1;
 let hasProject = false;
+
+// ═══════════════════════════════════════════════════════
+// SLACK CHANNEL
+// ═══════════════════════════════════════════════════════
+function saveSlackChannel() {
+  if (!project.slackChannel) project.slackChannel = { name:'', url:'', updates:[] };
+  project.slackChannel.name = (document.getElementById('slackChannelName')?.value || '').trim();
+  project.slackChannel.url  = (document.getElementById('slackChannelUrl')?.value  || '').trim();
+  const btn = document.getElementById('openSlackBtn');
+  if (btn) btn.style.display = project.slackChannel.url ? 'inline-flex' : 'none';
+  triggerAutoSave();
+}
+
+function openSlackChannel() {
+  const url = project.slackChannel?.url || (document.getElementById('slackChannelUrl')?.value || '').trim();
+  if (url) window.open(url, '_blank');
+  else alert('No Slack channel URL saved yet — paste the link in the Channel Link field.');
+}
+
+function addSlackUpdate() {
+  const input = document.getElementById('newSlackUpdate');
+  const text = (input?.value || '').trim();
+  if (!text) return;
+  if (!project.slackChannel) project.slackChannel = { name:'', url:'', updates:[] };
+  if (!project.slackChannel.updates) project.slackChannel.updates = [];
+  project.slackChannel.updates.unshift({
+    id: Date.now(),
+    text,
+    addedAt: new Date().toISOString(),
+    addedBy: project.lead || 'Team'
+  });
+  input.value = '';
+  renderSlackUpdates();
+  doAutoSave();
+}
+
+function deleteSlackUpdate(id) {
+  if (!project.slackChannel?.updates) return;
+  project.slackChannel.updates = project.slackChannel.updates.filter(u => u.id !== id);
+  renderSlackUpdates();
+  triggerAutoSave();
+}
+
+function renderSlackUpdates() {
+  const container = document.getElementById('slackUpdatesList');
+  if (!container) return;
+  const updates = project.slackChannel?.updates || [];
+  if (updates.length === 0) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--text-secondary);padding:6px 0;">No updates yet — log key messages, decisions, or links from Slack here.</div>';
+    return;
+  }
+  container.innerHTML = updates.map(u => `
+    <div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;">
+        <div style="font-size:13px;color:var(--gray-dark);">${escHtml(u.text)}</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${escHtml(u.addedBy)} · ${new Date(u.addedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>
+      </div>
+      <button class="btn-icon" onclick="deleteSlackUpdate(${u.id})" title="Remove">🗑</button>
+    </div>
+  `).join('');
+}
+
+function syncSlackUI() {
+  const sc = project.slackChannel || {};
+  const nameEl = document.getElementById('slackChannelName');
+  const urlEl  = document.getElementById('slackChannelUrl');
+  const btn    = document.getElementById('openSlackBtn');
+  if (nameEl) nameEl.value = sc.name || '';
+  if (urlEl)  urlEl.value  = sc.url  || '';
+  if (btn) btn.style.display = sc.url ? 'inline-flex' : 'none';
+  renderSlackUpdates();
+}
+
+// ═══════════════════════════════════════════════════════
+// NEXT MEETING & CALENDAR
+// ═══════════════════════════════════════════════════════
+function saveNextMeeting() {
+  if (!project.nextMeeting) project.nextMeeting = { title:'', date:'', time:'', calendarUrl:'', topics:[] };
+  project.nextMeeting.title       = (document.getElementById('nextMeetingTitle')?.value || '').trim();
+  project.nextMeeting.date        =  document.getElementById('nextMeetingDate')?.value  || '';
+  project.nextMeeting.time        =  document.getElementById('nextMeetingTime')?.value  || '';
+  project.nextMeeting.calendarUrl = (document.getElementById('calendarUrl')?.value      || '').trim();
+  triggerAutoSave();
+  updateDashboardNextMeeting();
+}
+
+function openCalendarLink() {
+  const url = project.nextMeeting?.calendarUrl || (document.getElementById('calendarUrl')?.value || '').trim();
+  if (url) window.open(url, '_blank');
+  else alert('No calendar link saved yet — paste a Google Calendar or Outlook event URL in the Calendar Link field.');
+}
+
+function addMeetingTopic() {
+  const input = document.getElementById('newMeetingTopic');
+  const text = (input?.value || '').trim();
+  if (!text) return;
+  if (!project.nextMeeting) project.nextMeeting = { title:'', date:'', time:'', calendarUrl:'', topics:[] };
+  if (!project.nextMeeting.topics) project.nextMeeting.topics = [];
+  project.nextMeeting.topics.push({ id: Date.now(), text });
+  input.value = '';
+  renderMeetingTopics();
+  doAutoSave();
+}
+
+function removeMeetingTopic(id) {
+  if (!project.nextMeeting?.topics) return;
+  project.nextMeeting.topics = project.nextMeeting.topics.filter(t => t.id !== id);
+  renderMeetingTopics();
+  triggerAutoSave();
+}
+
+function renderMeetingTopics() {
+  const container = document.getElementById('meetingTopicsList');
+  if (!container) return;
+  const topics = project.nextMeeting?.topics || [];
+  if (topics.length === 0) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--text-secondary);">No topics yet — add agenda items above.</div>';
+    return;
+  }
+  container.innerHTML = topics.map((t, i) => `
+    <div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:12px;color:var(--text-secondary);min-width:18px;">${i + 1}.</span>
+      <span style="font-size:13px;flex:1;">${escHtml(t.text)}</span>
+      <button class="btn-icon" onclick="removeMeetingTopic(${t.id})" title="Remove" style="font-size:11px;">✕</button>
+    </div>
+  `).join('');
+}
+
+function syncNextMeetingUI() {
+  const nm = project.nextMeeting || {};
+  const titleEl = document.getElementById('nextMeetingTitle');
+  const dateEl  = document.getElementById('nextMeetingDate');
+  const timeEl  = document.getElementById('nextMeetingTime');
+  const calEl   = document.getElementById('calendarUrl');
+  if (titleEl) titleEl.value = nm.title       || '';
+  if (dateEl)  dateEl.value  = nm.date        || '';
+  if (timeEl)  timeEl.value  = nm.time        || '';
+  if (calEl)   calEl.value   = nm.calendarUrl || '';
+  renderMeetingTopics();
+}
+
+function updateDashboardNextMeeting() {
+  const el = document.getElementById('dashNextMeeting');
+  if (!el) return;
+  const nm = project.nextMeeting || {};
+  if (!nm.title && !nm.date) {
+    el.innerHTML = '<span style="color:var(--text-secondary);font-size:13px;">No next meeting set — add one in Meeting Notes.</span>';
+    return;
+  }
+  const dateStr = nm.date ? new Date(nm.date + 'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : '';
+  const timeStr = nm.time ? ' · ' + nm.time : '';
+  const topics = (nm.topics || []).slice(0, 8);
+  el.innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:200px;">
+        <div style="font-size:15px;font-weight:700;color:var(--gray-dark);">${escHtml(nm.title || '')}</div>
+        ${dateStr ? `<div style="font-size:13px;color:var(--text-secondary);margin-top:3px;">📅 ${dateStr}${timeStr}</div>` : ''}
+        ${nm.calendarUrl ? `<a href="${escHtml(nm.calendarUrl)}" target="_blank" style="font-size:12px;color:var(--purple);display:inline-block;margin-top:4px;">Open Calendar ↗</a>` : ''}
+        ${topics.length ? `
+          <div style="margin-top:10px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:4px;">Agenda</div>
+            <ol style="margin:0 0 0 16px;padding:0;font-size:13px;line-height:1.7;">
+              ${topics.map(t => `<li>${escHtml(t.text)}</li>`).join('')}
+            </ol>
+          </div>` : ''}
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="switchTab('meetings')">Edit →</button>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// SEND PROPOSAL REFERENCE EMAIL
+// ═══════════════════════════════════════════════════════
+function sendProposalReferenceEmail() {
+  // Collect "shared" stakeholder emails from project setup
+  const toEmails = [];
+  if (typeof STAKEHOLDER_LIST !== 'undefined') {
+    STAKEHOLDER_LIST.forEach(s => {
+      const d = project.stakeholders?.[s.key] || {};
+      if (d.shared && d.contactEmail?.trim()) toEmails.push(d.contactEmail.trim());
+    });
+  }
+  const propName     = (document.getElementById('prop_name')?.value     || project.name || 'Untitled Project').trim();
+  const propLead     = (document.getElementById('prop_lead')?.value     || project.lead || '').trim();
+  const propDate     = (document.getElementById('prop_date')?.value     || '').trim();
+  const propProblem  = (document.getElementById('prop_problem')?.value  || '').trim();
+  const propSolution = (document.getElementById('prop_solution')?.value || '').trim();
+  const propGoals    = (document.getElementById('prop_goals')?.value    || '').trim();
+  const propInScope  = (document.getElementById('prop_inscope')?.value  || '').trim();
+  const propRisks    = (document.getElementById('prop_risks')?.value    || '').trim();
+
+  const subject = encodeURIComponent(`Project Reference: ${propName}`);
+
+  let body = `Hi team,\n\nPlease find the project reference summary for: ${propName}\n`;
+  if (propLead) body += `Project Lead: ${propLead}\n`;
+  if (propDate) body += `Target Launch Date: ${propDate}\n`;
+  body += `\n${'─'.repeat(50)}\n\n`;
+  if (propProblem)  body += `PROBLEM STATEMENT\n${propProblem}\n\n`;
+  if (propSolution) body += `PROPOSED SOLUTION\n${propSolution}\n\n`;
+  if (propGoals)    body += `GOALS & SUCCESS METRICS\n${propGoals}\n\n`;
+  if (propInScope)  body += `IN SCOPE\n${propInScope}\n\n`;
+  if (propRisks)    body += `KEY RISKS & ASSUMPTIONS\n${propRisks}\n\n`;
+  body += `${'─'.repeat(50)}\n\nThis is a reference document for the ${propName} project launch. Please review and reach out with any questions.\n\nBest,\n${propLead || 'The Project Team'}`;
+
+  if (toEmails.length === 0) {
+    const ok = confirm('No shared stakeholder emails found in Project Setup → Stakeholder Plan.\n\nOpen your email client anyway so you can add recipients manually?');
+    if (ok) window.open(`mailto:?subject=${subject}&body=${encodeURIComponent(body)}`, '_blank');
+    return;
+  }
+  window.open(`mailto:${toEmails.join(',')}?subject=${subject}&body=${encodeURIComponent(body)}`, '_blank');
+}
 
 // ═══════════════════════════════════════════════════════
 // INIT
@@ -2242,6 +2558,9 @@ function init() {
   renderDecisions();
   renderActionItems();
   renderBudget();
+  syncSlackUI();
+  syncNextMeetingUI();
+  updateDashboardNextMeeting();
   updateDashboard();
 
   // Set default dates for digests to today
@@ -2342,6 +2661,12 @@ function createProject() {
     actionItems: [],
     budget: { totalBudget: '', currency: 'USD', contingency: '', items: [] },
     ragStatus: { status: 'Green', reason: '', updatedAt: '', updatedBy: '' },
+    slackChannel: {
+      name: (document.getElementById('wSlackName')?.value || '').trim(),
+      url:  (document.getElementById('wSlackUrl')?.value  || '').trim(),
+      updates: []
+    },
+    nextMeeting: { title: '', date: '', time: '', calendarUrl: '', topics: [] },
   };
 
   // Read stakeholders from wizard grid
@@ -6213,6 +6538,7 @@ function startFirebaseListener() {
     aiIdCounter         = Math.max(1, ...((project.actionItems||[]).map(x => x.id||0))) + 1;
     budgetItemIdCounter = Math.max(1, ...((project.budget?.items||[]).map(x => x.id||0))) + 1;
     syncSetupForm(); buildLaunchChecklist(); renderTasks(); renderRisks(); renderMeetings(); renderMilestones(); renderDecisions(); renderActionItems(); renderBudget();
+    syncSlackUI(); syncNextMeetingUI(); updateDashboardNextMeeting();
     updateDashboard(); updateHeader();
     isRemoteUpdate = false;
     showToast(`Loaded "${project.name}" from cloud.`);
@@ -6331,6 +6657,7 @@ function loadProjectById(id) {
     aiIdCounter         = Math.max(1, ...((project.actionItems||[]).map(x => x.id||0))) + 1;
     budgetItemIdCounter = Math.max(1, ...((project.budget?.items||[]).map(x => x.id||0))) + 1;
   syncSetupForm(); buildLaunchChecklist(); renderTasks(); renderRisks(); renderMeetings(); renderMilestones(); renderDecisions(); renderActionItems(); renderBudget();
+  syncSlackUI(); syncNextMeetingUI(); updateDashboardNextMeeting();
   updateDashboard(); updateHeader();
   lastSavedHash = '';
   closeModal('myProjectsModal');
