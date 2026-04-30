@@ -6,6 +6,7 @@
 <title>Moxie Project Plan</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <!-- Firebase v8 compat (no build step needed) -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -317,15 +318,16 @@
 <div class="tabs-nav">
   <button class="tab-btn active" data-tab="dashboard"  onclick="switchTab('dashboard')">📊 Dashboard</button>
   <button class="tab-btn"        data-tab="setup"       onclick="switchTab('setup')">⚙️ Project Setup</button>
-  <button class="tab-btn"        data-tab="proposal"    onclick="switchTab('proposal')">📄 Proposal Builder</button>
   <button class="tab-btn"        data-tab="milestones"  onclick="switchTab('milestones')">🗂 Plan</button>
   <button class="tab-btn"        data-tab="launch"      onclick="switchTab('launch')">🚀 Launch Checklist</button>
   <button class="tab-btn"        data-tab="meetings"    onclick="switchTab('meetings')">📝 Meeting Notes</button>
   <button class="tab-btn"        data-tab="risks"       onclick="switchTab('risks')">⚠️ Risk Register</button>
   <button class="tab-btn"        data-tab="decisions"   onclick="switchTab('decisions')">📋 Decisions</button>
   <button class="tab-btn"        data-tab="budget"      onclick="switchTab('budget')">💰 Budget</button>
+  <button class="tab-btn"        data-tab="processflow" onclick="switchTab('processflow')">🧩 Process Flow</button>
   <button class="tab-btn"        data-tab="digests"     onclick="switchTab('digests')">📧 Digests & Briefs</button>
   <button class="tab-btn"        data-tab="links"       onclick="switchTab('links')">🔗 Links</button>
+  <button class="tab-btn"        data-tab="proposal"    onclick="switchTab('proposal')">📄 Proposal Builder</button>
 </div>
 
 <!-- ===================== DASHBOARD ===================== -->
@@ -466,13 +468,33 @@
   <div style="background:linear-gradient(135deg,var(--purple-light),var(--teal-light));border-radius:var(--radius);padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
     <div>
       <h2 style="font-size:17px;font-weight:700;color:var(--purple);margin-bottom:4px;">📄 Project Proposal Builder</h2>
-      <p style="font-size:13px;color:var(--gray-dark);">Fill in the form → generate a polished proposal → send to Google Drive. Or upload any doc and auto-extract tasks.</p>
+      <p style="font-size:13px;color:var(--gray-dark);">Already have a proposal in Google Docs? Paste the link below. Otherwise, generate one from the form.</p>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-primary" onclick="generateProposal()">✨ Generate Proposal</button>
       <button class="btn btn-teal" onclick="openPasteProposalModal()" title="Paste an existing proposal and auto-fill the form">📋 Paste Existing Proposal</button>
       <button class="btn btn-secondary" onclick="openGoogleDriveImport()">📎 Import from Google Drive</button>
       <button class="btn btn-secondary" onclick="document.getElementById('uploadSection').scrollIntoView({behavior:'smooth'})">⬆ Upload a Doc</button>
+    </div>
+  </div>
+
+  <!-- EXISTING GOOGLE DOC LINK -->
+  <div class="card" style="margin-bottom:20px;border-left:4px solid var(--teal);">
+    <div class="card-header" style="background:var(--teal-light);">
+      <div class="card-title">🔗 Use an Existing Proposal</div>
+      <span style="font-size:12px;color:var(--text-secondary);">Skip the form — link to a Google Doc / Notion / any URL</span>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div style="flex:1;min-width:280px;">
+          <label>Existing Proposal URL</label>
+          <input type="text" id="prop_existing_url" placeholder="https://docs.google.com/document/d/..." oninput="onExistingProposalUrlChange()">
+        </div>
+        <button class="btn btn-primary" onclick="saveExistingProposalUrl()">💾 Save Link</button>
+        <button class="btn btn-teal" id="prop_open_existing_btn" onclick="openExistingProposalUrl()" style="display:none;">↗ Open Proposal</button>
+        <button class="btn btn-secondary" id="prop_clear_existing_btn" onclick="clearExistingProposalUrl()" style="display:none;">✕ Clear</button>
+      </div>
+      <div id="prop_existing_status" style="font-size:12px;color:var(--text-secondary);margin-top:8px;"></div>
     </div>
   </div>
 
@@ -1060,6 +1082,95 @@
         <button class="btn btn-secondary" onclick="closeModal('pasteProposalModal')">Cancel</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ===================== PROCESS FLOW ===================== -->
+<div id="tab-processflow" class="tab-content">
+  <!-- TOP BANNER -->
+  <div style="background:linear-gradient(135deg,var(--purple-light),var(--teal-light));border-radius:var(--radius);padding:20px 24px;margin-bottom:20px;">
+    <h2 style="font-size:17px;font-weight:700;color:var(--purple);margin-bottom:4px;">🧩 Process Flow Map</h2>
+    <p style="font-size:13px;color:var(--gray-dark);">Document the as-is or to-be process for this project. Link to Lucidchart, Miro, Whimsical, Figma, or paste a Mermaid diagram below.</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+    <!-- LEFT: External diagram link + description -->
+    <div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">🔗 External Diagram Link</div></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Diagram URL (Lucidchart, Miro, Whimsical, Figma, etc.)</label>
+            <input type="text" id="processflow_url" placeholder="https://lucid.app/lucidchart/..." oninput="onProcessFlowUrlChange()">
+          </div>
+          <div class="form-group">
+            <label>Tool / Source</label>
+            <select id="processflow_tool" onchange="onProcessFlowFieldChange()">
+              <option value="">— Select —</option>
+              <option value="Lucidchart">Lucidchart</option>
+              <option value="Miro">Miro</option>
+              <option value="Whimsical">Whimsical</option>
+              <option value="Figma">Figma / FigJam</option>
+              <option value="Google Drawings">Google Drawings</option>
+              <option value="Visio">Visio</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Process Owner</label>
+            <input type="text" id="processflow_owner" placeholder="Who owns this process?" oninput="onProcessFlowFieldChange()">
+          </div>
+          <div class="form-group">
+            <label>Description / Summary</label>
+            <textarea id="processflow_desc" rows="4" placeholder="Brief description of what this process covers, key handoffs, and decision points..." oninput="onProcessFlowFieldChange()"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select id="processflow_status" onchange="onProcessFlowFieldChange()">
+              <option value="Draft">Draft</option>
+              <option value="In Review">In Review</option>
+              <option value="Approved">Approved</option>
+              <option value="Active">Active</option>
+              <option value="Deprecated">Deprecated</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="saveProcessFlow()">💾 Save</button>
+            <button class="btn btn-teal" id="processflow_open_btn" onclick="openProcessFlowUrl()" style="display:none;">↗ Open Diagram</button>
+            <button class="btn btn-secondary" onclick="clearProcessFlow()">✕ Clear</button>
+          </div>
+          <div id="processflow_status_msg" style="font-size:12px;color:var(--text-secondary);margin-top:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Mermaid embed -->
+    <div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📐 Inline Diagram (Mermaid)</div>
+          <a href="https://mermaid.js.org/intro/" target="_blank" style="font-size:11px;color:var(--purple);">Syntax help ↗</a>
+        </div>
+        <div class="card-body">
+          <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Paste Mermaid syntax (flowchart, sequenceDiagram, etc.) and it renders below. Use this for quick inline maps. For polished diagrams, link out via the left panel.</p>
+          <textarea id="processflow_mermaid" rows="8" style="font-family:monospace;font-size:12px;" placeholder="flowchart LR
+  A[Lead created] --> B{Qualified?}
+  B -- Yes --> C[Sales rep assigned]
+  B -- No --> D[Nurture queue]
+  C --> E[Demo scheduled]
+  E --> F[Proposal sent]" oninput="onProcessFlowFieldChange()"></textarea>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn btn-primary btn-sm" onclick="renderMermaidDiagram()">▶ Render</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadMermaidExample()">📋 Insert Example</button>
+          </div>
+          <div id="processflow_mermaid_render" style="margin-top:12px;padding:12px;border:1px dashed var(--border);border-radius:var(--radius-sm);background:#fafbfc;min-height:120px;font-size:13px;color:var(--text-secondary);text-align:center;display:flex;align-items:center;justify-content:center;">
+            <span>Click <strong>Render</strong> to preview your diagram here.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -2295,6 +2406,8 @@ function switchTab(name) {
   if (name === 'decisions')   renderDecisions();
   if (name === 'actions')     renderActionItems();
   if (name === 'budget')      renderBudget();
+  if (name === 'processflow') loadProcessFlow();
+  if (name === 'proposal')    loadExistingProposalUrl();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -5119,6 +5232,179 @@ function escapeQuotes(str) {
 }
 
 // ═══════════════════════════════════════════════════════
+// EXISTING PROPOSAL LINK (Google Doc / Notion / etc.)
+// ═══════════════════════════════════════════════════════
+function onExistingProposalUrlChange() {
+  const url = document.getElementById('prop_existing_url').value.trim();
+  const openBtn = document.getElementById('prop_open_existing_btn');
+  if (openBtn) openBtn.style.display = url ? 'inline-flex' : 'none';
+}
+
+function saveExistingProposalUrl() {
+  const url = document.getElementById('prop_existing_url').value.trim();
+  if (!url) { showToast('Paste a URL first.', 'error'); return; }
+  if (!/^https?:\/\//i.test(url)) {
+    showToast('URL must start with http:// or https://', 'error');
+    return;
+  }
+  if (!project.proposal) project.proposal = {};
+  project.proposal.existingUrl = url;
+  project.proposal.savedAt = new Date().toISOString();
+  document.getElementById('prop_existing_status').textContent =
+    '✓ Saved · ' + new Date().toLocaleString();
+  document.getElementById('prop_open_existing_btn').style.display = 'inline-flex';
+  document.getElementById('prop_clear_existing_btn').style.display = 'inline-flex';
+  triggerAutoSave();
+  showToast('Proposal link saved.');
+}
+
+function openExistingProposalUrl() {
+  const url = (project.proposal && project.proposal.existingUrl) ||
+              document.getElementById('prop_existing_url').value.trim();
+  if (!url) { showToast('No URL saved.', 'error'); return; }
+  window.open(url, '_blank', 'noopener');
+}
+
+function clearExistingProposalUrl() {
+  if (!confirm('Remove the saved proposal link?')) return;
+  if (project.proposal) project.proposal.existingUrl = '';
+  document.getElementById('prop_existing_url').value = '';
+  document.getElementById('prop_existing_status').textContent = '';
+  document.getElementById('prop_open_existing_btn').style.display = 'none';
+  document.getElementById('prop_clear_existing_btn').style.display = 'none';
+  triggerAutoSave();
+}
+
+function loadExistingProposalUrl() {
+  const url = project.proposal && project.proposal.existingUrl;
+  const input = document.getElementById('prop_existing_url');
+  if (!input) return;
+  input.value = url || '';
+  document.getElementById('prop_open_existing_btn').style.display = url ? 'inline-flex' : 'none';
+  document.getElementById('prop_clear_existing_btn').style.display = url ? 'inline-flex' : 'none';
+  document.getElementById('prop_existing_status').textContent = url
+    ? ('Linked · saved ' + (project.proposal.savedAt ? new Date(project.proposal.savedAt).toLocaleString() : ''))
+    : '';
+}
+
+// ═══════════════════════════════════════════════════════
+// PROCESS FLOW MAP
+// ═══════════════════════════════════════════════════════
+function getProcessFlowFields() {
+  return {
+    url:    document.getElementById('processflow_url').value.trim(),
+    tool:   document.getElementById('processflow_tool').value,
+    owner:  document.getElementById('processflow_owner').value.trim(),
+    desc:   document.getElementById('processflow_desc').value.trim(),
+    status: document.getElementById('processflow_status').value,
+    mermaid:document.getElementById('processflow_mermaid').value,
+  };
+}
+
+function onProcessFlowUrlChange() {
+  const url = document.getElementById('processflow_url').value.trim();
+  const btn = document.getElementById('processflow_open_btn');
+  if (btn) btn.style.display = url ? 'inline-flex' : 'none';
+  onProcessFlowFieldChange();
+}
+
+function onProcessFlowFieldChange() {
+  // Mark dirty so auto-save kicks in. Actual save happens via saveProcessFlow or auto-save tick.
+  if (project.processFlow == null) project.processFlow = {};
+  Object.assign(project.processFlow, getProcessFlowFields());
+  triggerAutoSave();
+}
+
+function saveProcessFlow() {
+  if (!project.processFlow) project.processFlow = {};
+  Object.assign(project.processFlow, getProcessFlowFields());
+  project.processFlow.savedAt = new Date().toISOString();
+  document.getElementById('processflow_status_msg').textContent =
+    '✓ Saved · ' + new Date().toLocaleString();
+  triggerAutoSave();
+  showToast('Process flow saved.');
+}
+
+function openProcessFlowUrl() {
+  const url = document.getElementById('processflow_url').value.trim();
+  if (!url) { showToast('No URL provided.', 'error'); return; }
+  if (!/^https?:\/\//i.test(url)) { showToast('URL must start with http:// or https://', 'error'); return; }
+  window.open(url, '_blank', 'noopener');
+}
+
+function clearProcessFlow() {
+  if (!confirm('Clear all process flow fields?')) return;
+  ['processflow_url','processflow_owner','processflow_desc','processflow_mermaid'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('processflow_tool').value = '';
+  document.getElementById('processflow_status').value = 'Draft';
+  document.getElementById('processflow_open_btn').style.display = 'none';
+  document.getElementById('processflow_status_msg').textContent = '';
+  document.getElementById('processflow_mermaid_render').innerHTML =
+    '<span>Click <strong>Render</strong> to preview your diagram here.</span>';
+  if (project.processFlow) project.processFlow = {};
+  triggerAutoSave();
+}
+
+function loadProcessFlow() {
+  const pf = project.processFlow || {};
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  set('processflow_url', pf.url);
+  set('processflow_tool', pf.tool);
+  set('processflow_owner', pf.owner);
+  set('processflow_desc', pf.desc);
+  set('processflow_mermaid', pf.mermaid);
+  const statusEl = document.getElementById('processflow_status');
+  if (statusEl) statusEl.value = pf.status || 'Draft';
+  const openBtn = document.getElementById('processflow_open_btn');
+  if (openBtn) openBtn.style.display = pf.url ? 'inline-flex' : 'none';
+  const msg = document.getElementById('processflow_status_msg');
+  if (msg && pf.savedAt) msg.textContent = 'Linked · saved ' + new Date(pf.savedAt).toLocaleString();
+  if (pf.mermaid) renderMermaidDiagram();
+}
+
+let _mermaidRenderCounter = 0;
+async function renderMermaidDiagram() {
+  const code = document.getElementById('processflow_mermaid').value.trim();
+  const target = document.getElementById('processflow_mermaid_render');
+  if (!code) {
+    target.innerHTML = '<span>Paste Mermaid syntax above and click Render.</span>';
+    return;
+  }
+  if (typeof mermaid === 'undefined') {
+    target.innerHTML = '<span style="color:var(--red);">Mermaid library failed to load.</span>';
+    return;
+  }
+  try {
+    mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+    _mermaidRenderCounter++;
+    const id = 'mermaid_render_' + _mermaidRenderCounter;
+    const { svg } = await mermaid.render(id, code);
+    target.innerHTML = svg;
+    target.style.textAlign = 'left';
+  } catch (e) {
+    target.innerHTML = '<div style="color:var(--red);text-align:left;font-size:12px;"><strong>Diagram error:</strong><br>' +
+                       (e.message || String(e)).replace(/</g,'&lt;') + '</div>';
+  }
+}
+
+function loadMermaidExample() {
+  const example = `flowchart LR
+  A[New MedSpa Lead] --> B{Qualified?}
+  B -- Yes --> C[Sales Rep Assigned]
+  B -- No --> D[Nurture Queue]
+  C --> E[Demo Scheduled]
+  E --> F[Proposal Sent]
+  F --> G{Signed?}
+  G -- Yes --> H[Onboarding Kickoff]
+  G -- No --> D`;
+  document.getElementById('processflow_mermaid').value = example;
+  renderMermaidDiagram();
+  onProcessFlowFieldChange();
+}
+
+// ═══════════════════════════════════════════════════════
 // PROPOSAL BUILDER
 // ═══════════════════════════════════════════════════════
 let generatedProposalText = '';
@@ -5752,6 +6038,9 @@ function getFbProjectId() {
 function setFbProjectId(id) {
   fbProjectId = id;
   localStorage.setItem(FB_PROJECT_KEY, id);
+  // Keep local project ID aligned with Firebase ID so saves go to a stable key
+  // (prevents duplicate local entries piling up on every refresh).
+  if (id) currentProjectId = id;
   window.history.replaceState(null, '', window.location.pathname + '#' + id);
   const urlEl = document.getElementById('shareUrlDisplay');
   if (urlEl) urlEl.textContent = getShareUrl();
@@ -6186,6 +6475,10 @@ function startFirebaseListener() {
 
     Object.assign(project, loaded);
     hasProject = true;
+    // BUGFIX: Anchor local project ID to the Firebase project ID so we
+    // don't mint a new local entry on every save. This prevents the
+    // "duplicate BookKeeping on every refresh" bug.
+    if (fbProjectId) currentProjectId = fbProjectId;
     lastRemoteSaveAt = remoteTime;
 
     // Re-render everything
@@ -6225,11 +6518,14 @@ function startFirebaseListener() {
     if (!data || hasProject) return; // Don't overwrite if we already have a local project
     const { _savedAt, _savedBy, ...loaded } = data;
     if (!loaded.name) return;
-    const restore = confirm(`☁️ Load project from cloud?\n\n"${loaded.name}" — last saved by ${_savedBy || 'team'} at ${_savedAt ? new Date(_savedAt).toLocaleString() : 'unknown'}.\n\nOK = load from cloud   Cancel = keep local version`);
-    if (!restore) return;
+    // Silently load — teammates opening a shared link shouldn't see a confirm dialog.
+    // Local data only exists if they previously had a project, in which case hasProject
+    // is already true above and we wouldn't be here.
     isRemoteUpdate = true;
     Object.assign(project, loaded);
     hasProject = true;
+    // BUGFIX: anchor local ID to Firebase ID so doAutoSave doesn't mint a new entry
+    if (fbProjectId) currentProjectId = fbProjectId;
     lastRemoteSaveAt = _savedAt || '';
     taskIdCounter    = Math.max(1, ...project.tasks.map(t => t.id   || 0)) + 1;
     riskIdCounter    = Math.max(1, ...project.risks.map(r => r.id   || 0)) + 1;
@@ -6463,6 +6759,39 @@ function autoLoadOnStart() {
         }
       }
     }
+
+    // ── DEDUPE: collapse duplicate entries created by the old bug ──────────
+    // If multiple entries share the same name+lead+dueDate, keep only the
+    // most-recently-saved one. Also prefer the Firebase-anchored entry if
+    // its ID matches the URL hash.
+    {
+      const all = getAllProjects();
+      const fbId = (window.location.hash || '').replace('#','').trim();
+      const groups = {};
+      Object.keys(all).forEach(id => {
+        const p = all[id];
+        const sig = (p.name || '') + '|' + (p.lead || '') + '|' + (p.dueDate || '');
+        if (!groups[sig]) groups[sig] = [];
+        groups[sig].push(id);
+      });
+      let removed = 0;
+      Object.values(groups).forEach(idsInGroup => {
+        if (idsInGroup.length <= 1) return;
+        // Sort: prefer the Firebase-anchored ID, then most recent _savedAt
+        idsInGroup.sort((a, b) => {
+          if (a === fbId) return -1;
+          if (b === fbId) return 1;
+          return (all[b]._savedAt || '').localeCompare(all[a]._savedAt || '');
+        });
+        // Keep first, delete the rest
+        idsInGroup.slice(1).forEach(id => { delete all[id]; removed++; });
+      });
+      if (removed > 0) {
+        saveAllProjects(all);
+        console.log(`Cleaned up ${removed} duplicate project entries.`);
+      }
+    }
+    // ──────────────────────────────────────────────────────────────────────
 
     const all = getAllProjects();
     const ids = Object.keys(all);
