@@ -3651,6 +3651,29 @@ function editAiCell(id, field, cell) {
   inp.addEventListener('keydown', e=>{ if(e.key==='Enter') save(); if(e.key==='Escape') renderMilestones(); });
 }
 
+// ── Move task / action item between phases (called from Plan view dropdowns) ──
+function setTaskMilestone(taskId, newMilestoneId) {
+  const t = (project.tasks || []).find(x => x.id === taskId);
+  if (!t) return;
+  t.milestoneId = (newMilestoneId === null || newMilestoneId === '') ? null : Number(newMilestoneId);
+  renderMilestones();
+  if (typeof renderTasks === 'function') renderTasks();
+  triggerAutoSave();
+  const ms = (project.milestones || []).find(m => m.id === t.milestoneId);
+  showToast(`Moved to ${ms ? ms.name : 'Unassigned'}`);
+}
+
+function setAiMilestone(aiId, newMilestoneId) {
+  const a = (project.actionItems || []).find(x => x.id === aiId);
+  if (!a) return;
+  a.milestoneId = (newMilestoneId === null || newMilestoneId === '') ? null : Number(newMilestoneId);
+  renderMilestones();
+  if (typeof renderActionItems === 'function') renderActionItems();
+  triggerAutoSave();
+  const ms = (project.milestones || []).find(m => m.id === a.milestoneId);
+  showToast(`Moved to ${ms ? ms.name : 'Unassigned'}`);
+}
+
 // ── renderPlanView: call this whenever tasks or AIs change ──
 function renderPlanView() {
   renderMilestones();
@@ -3702,6 +3725,17 @@ function renderMilestones() {
       <button class="btn btn-primary" onclick="addMilestone()" style="align-self:flex-end;white-space:nowrap;">＋ Add Milestone</button>
     </div>`;
 
+  // ── Helper: build milestone options for "move to phase" dropdown ─
+  function msOptions(currentId) {
+    const cur = currentId ?? null;
+    const opts = [`<option value="" ${cur===null?'selected':''}>— Unassigned —</option>`];
+    ms.forEach(m => {
+      const sel = (cur === m.id) ? 'selected' : '';
+      opts.push(`<option value="${m.id}" ${sel}>${escHtml(m.name)}</option>`);
+    });
+    return opts.join('');
+  }
+
   // ── Helper: render tasks for a milestone (or null = unassigned) ─
   function taskRows(milestoneId) {
     const mTasks = tasks.filter(t => (t.milestoneId ?? null) === milestoneId);
@@ -3728,6 +3762,12 @@ function renderMilestones() {
         <td style="padding:6px 8px;">
           <select class="inline-select" style="font-size:12px;" onchange="updateTaskField(${t.id},'status',this.value)">
             ${STATUSES.map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </td>
+        <td style="padding:6px 8px;">
+          <select class="inline-select" style="font-size:12px;max-width:160px;" title="Move to phase"
+            onchange="setTaskMilestone(${t.id}, this.value === '' ? null : Number(this.value))">
+            ${msOptions(t.milestoneId)}
           </select>
         </td>
         <td style="padding:6px 8px;text-align:center;">
@@ -3767,6 +3807,12 @@ function renderMilestones() {
         </td>
         <td style="padding:6px 8px;${duePast?'color:var(--red);font-weight:700;':''}font-size:12px;">${dueFmt}</td>
         <td style="padding:6px 8px;"><span style="font-size:10px;font-weight:600;border-radius:3px;padding:2px 5px;${pcfg.badge}">${pcfg.label}</span></td>
+        <td style="padding:6px 8px;">
+          <select class="inline-select" style="font-size:12px;max-width:150px;" title="Move to phase"
+            onchange="setAiMilestone(${a.id}, this.value === '' ? null : Number(this.value))">
+            ${msOptions(a.milestoneId)}
+          </select>
+        </td>
         <td style="padding:6px 8px;text-align:center;">
           <button class="btn-icon" onclick="deleteActionItem(${a.id})" title="Delete">🗑</button>
         </td>
@@ -3797,6 +3843,7 @@ function renderMilestones() {
               <th style="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-secondary);width:110px;">Owner</th>
               <th style="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-secondary);width:100px;">Due</th>
               <th style="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-secondary);width:120px;">Status</th>
+              <th style="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-secondary);width:160px;">Phase</th>
               <th style="padding:5px 8px;width:50px;font-size:10px;text-transform:uppercase;color:var(--text-secondary);">Risk</th>
               <th style="width:32px;"></th>
             </tr></thead>
@@ -3828,6 +3875,7 @@ function renderMilestones() {
               <th style="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-secondary);width:100px;">Owner</th>
               <th style="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-secondary);width:70px;">Due</th>
               <th style="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-secondary);width:70px;">Priority</th>
+              <th style="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-secondary);width:150px;">Phase</th>
               <th style="width:32px;"></th>
             </tr></thead>
             <tbody>${rows}</tbody>
