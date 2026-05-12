@@ -319,6 +319,7 @@
   <button class="tab-btn active" data-tab="dashboard"  onclick="switchTab('dashboard')">📊 Dashboard</button>
   <button class="tab-btn"        data-tab="setup"       onclick="switchTab('setup')">⚙️ Project Setup</button>
   <button class="tab-btn"        data-tab="milestones"  onclick="switchTab('milestones')">🗂 Plan</button>
+  <button class="tab-btn"        data-tab="workstreams" onclick="switchTab('workstreams')">🧭 Workstreams</button>
   <button class="tab-btn"        data-tab="launch"      onclick="switchTab('launch')">🚀 Launch Checklist</button>
   <button class="tab-btn"        data-tab="meetings"    onclick="switchTab('meetings')">📝 Meeting Notes</button>
   <button class="tab-btn"        data-tab="risks"       onclick="switchTab('risks')">⚠️ Risk Register</button>
@@ -328,6 +329,7 @@
   <button class="tab-btn"        data-tab="digests"     onclick="switchTab('digests')">📧 Digests & Briefs</button>
   <button class="tab-btn"        data-tab="links"       onclick="switchTab('links')">🔗 Links</button>
   <button class="tab-btn"        data-tab="proposal"    onclick="switchTab('proposal')">📄 Proposal Builder</button>
+  <button class="tab-btn"        data-tab="aiassistant" onclick="switchTab('aiassistant')" style="color:var(--purple);font-weight:700;">🤖 AI Assistant</button>
 </div>
 
 <!-- ===================== DASHBOARD ===================== -->
@@ -378,6 +380,15 @@
         <div class="card-header"><div class="card-title">👥 Stakeholder Plan Status</div></div>
         <div class="card-body" id="dashStakeholders"></div>
       </div>
+    </div>
+
+    <!-- Team Roster by Team -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">👥 Project Owners by Team</div>
+        <button class="btn btn-sm btn-secondary" onclick="openPeopleModal()">Manage People →</button>
+      </div>
+      <div class="card-body" id="dashTeamRoster"></div>
     </div>
 
     <!-- Flagged risks -->
@@ -922,6 +933,15 @@
   <div id="planView"></div>
 </div>
 
+<!-- ===================== WORKSTREAMS ===================== -->
+<div id="tab-workstreams" class="tab-content">
+  <div style="background:linear-gradient(135deg,var(--purple-light),var(--teal-light));border-radius:var(--radius);padding:18px 22px;margin-bottom:20px;">
+    <h2 style="font-size:17px;font-weight:700;color:var(--purple);margin-bottom:4px;">🧭 Workstreams</h2>
+    <p style="font-size:13px;color:var(--gray-dark);">Tasks and action items grouped by milestone, with progress, team, and key risks per workstream. Pulled live from your Project Plan.</p>
+  </div>
+  <div id="workstreamsView"></div>
+</div>
+
 <!-- ===================== DECISIONS ===================== -->
 <div id="tab-decisions" class="tab-content">
   <div class="card">
@@ -1083,6 +1103,189 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- ===================== AI ASSISTANT ===================== -->
+<div id="tab-aiassistant" class="tab-content">
+
+  <!-- TOP BANNER -->
+  <div style="background:linear-gradient(135deg,#1F1A47,#6B4EFF);border-radius:var(--radius);padding:24px 28px;margin-bottom:20px;color:#fff;">
+    <h2 style="font-size:20px;font-weight:800;margin-bottom:4px;">🤖 AI Assistant</h2>
+    <p style="font-size:13px;opacity:0.9;">Generate decks, send updates, process meeting transcripts. All powered by Claude + your existing tools (Slack, SendGrid, Drive).</p>
+    <div id="ai_status_badge" style="display:none;margin-top:10px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;background:rgba(255,255,255,0.2);"></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+
+    <!-- ── 1. GENERATE DECK ──  HIDDEN: requires Vercel Pro for 60s timeout. Re-enable if upgrading. -->
+    <div class="card" style="display:none;">
+      <div class="card-header" style="background:linear-gradient(90deg,var(--purple-light),transparent);">
+        <div class="card-title">✨ Generate Working Session Deck (Pro plan only)</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Claude reads your project state and builds a polished .pptx with status, priorities, action items, and next steps.</p>
+
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Meeting Title (optional)</label>
+        <input type="text" id="ai_deck_title" placeholder="e.g. Bookkeeping Working Session — May 1" style="margin-bottom:12px;">
+
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Focus Areas (optional, comma-separated)</label>
+        <input type="text" id="ai_deck_focus" placeholder="e.g. process map, onboarding sequence, Layer rollout" style="margin-bottom:14px;">
+
+        <div style="background:var(--gray-light);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;margin-bottom:8px;">Distribution</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:6px;cursor:pointer;">
+            <input type="checkbox" id="ai_deck_drive" checked> Save to Google Drive
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:6px;cursor:pointer;">
+            <input type="checkbox" id="ai_deck_slack"> Post link to Slack
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;cursor:pointer;">
+            <input type="checkbox" id="ai_deck_email"> Email team (recipients in Settings)
+          </label>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;" onclick="aiGenerateDeck()">
+          ✨ Generate Deck
+        </button>
+        <div id="ai_deck_result" style="font-size:12px;color:var(--text-secondary);margin-top:10px;min-height:18px;"></div>
+      </div>
+    </div>
+
+    <!-- ── 2. PROCESS MEETING TRANSCRIPT ── -->
+    <div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,var(--teal-light),transparent);">
+        <div class="card-title">📝 Process Meeting Transcript</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Paste a Fathom / Avoma transcript. Claude extracts decisions, action items, and risks — adds them to your project automatically.</p>
+
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Meeting Title</label>
+        <input type="text" id="ai_tx_title" placeholder="e.g. Bookkeeping sync — Apr 30" style="margin-bottom:10px;">
+
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Transcript</label>
+        <textarea id="ai_tx_text" rows="8" placeholder="Paste the full transcript here..." style="font-size:12px;margin-bottom:12px;"></textarea>
+
+        <div style="background:var(--gray-light);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;margin-bottom:8px;">What to extract</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:6px;cursor:pointer;">
+            <input type="checkbox" id="ai_tx_actions" checked> Action items (added to project)
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:6px;cursor:pointer;">
+            <input type="checkbox" id="ai_tx_decisions" checked> Decisions (added to Decisions tab)
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:6px;cursor:pointer;">
+            <input type="checkbox" id="ai_tx_risks" checked> Risks (added to Risk Register)
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;cursor:pointer;">
+            <input type="checkbox" id="ai_tx_summary"> Meeting summary (added to Meeting Notes)
+          </label>
+        </div>
+
+        <button class="btn btn-teal" style="width:100%;" onclick="aiProcessTranscript()">
+          📝 Process Transcript
+        </button>
+        <div id="ai_tx_result" style="font-size:12px;color:var(--text-secondary);margin-top:10px;min-height:18px;"></div>
+      </div>
+    </div>
+
+    <!-- ── 3. SEND STATUS UPDATE ── -->
+    <div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,#FFF3E0,transparent);">
+        <div class="card-title">📊 Send Status Update</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Claude drafts a weekly status update from current project data and sends to your team.</p>
+
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Audience</label>
+        <select id="ai_su_audience" style="margin-bottom:10px;">
+          <option value="team">Team — operational detail</option>
+          <option value="leadership">Leadership — exec summary</option>
+          <option value="stakeholders">External stakeholders — high-level</option>
+        </select>
+
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Cadence</label>
+        <select id="ai_su_cadence" style="margin-bottom:14px;">
+          <option value="daily">Daily standup</option>
+          <option value="weekly" selected>Weekly status</option>
+          <option value="adhoc">Ad-hoc update</option>
+        </select>
+
+        <div style="background:var(--gray-light);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;margin-bottom:8px;">Send via</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:6px;cursor:pointer;">
+            <input type="checkbox" id="ai_su_slack" checked> Slack (channel in Settings)
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;cursor:pointer;">
+            <input type="checkbox" id="ai_su_email" checked> Email (recipients in Settings)
+          </label>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;background:#F57C00;" onclick="aiSendStatusUpdate()">
+          📊 Draft & Send Status
+        </button>
+        <div id="ai_su_result" style="font-size:12px;color:var(--text-secondary);margin-top:10px;min-height:18px;"></div>
+      </div>
+    </div>
+
+    <!-- ── 4. QUICK SLACK / EMAIL ── -->
+    <div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,#E3F2FD,transparent);">
+        <div class="card-title">💬 Quick Message</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Send a one-off Slack post or email without generating a full deck or update.</p>
+
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Subject (email only)</label>
+        <input type="text" id="ai_qm_subject" placeholder="e.g. Bookkeeping — heads up" style="margin-bottom:10px;">
+
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Message</label>
+        <textarea id="ai_qm_body" rows="5" placeholder="Type your message here, or describe what you want to send and check 'Polish with Claude' below..." style="margin-bottom:10px;"></textarea>
+
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:12px;cursor:pointer;">
+          <input type="checkbox" id="ai_qm_polish"> ✨ Polish with Claude before sending
+        </label>
+
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary" style="flex:1;" onclick="aiQuickSend('slack')">💬 Send Slack</button>
+          <button class="btn btn-teal" style="flex:1;" onclick="aiQuickSend('email')">📧 Send Email</button>
+        </div>
+        <div id="ai_qm_result" style="font-size:12px;color:var(--text-secondary);margin-top:10px;min-height:18px;"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── 5. SETTINGS ── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">⚙️ Settings · Recipients & Channels</div>
+      <span style="font-size:11px;color:var(--text-secondary);">Saved per project · synced to all teammates</span>
+    </div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Slack Channel</label>
+          <input type="text" id="ai_set_slackchannel" placeholder="#bookkeeping-launch" oninput="aiSettingsChange()">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">From Name (email)</label>
+          <input type="text" id="ai_set_fromname" placeholder="Jennifer Denton — Moxie" oninput="aiSettingsChange()">
+        </div>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Email Recipients (comma-separated)</label>
+        <textarea id="ai_set_recipients" rows="2" placeholder="leslie@joinmoxie.com, sol@layer.com, ben@layer.com, ceejay@joinmoxie.com" oninput="aiSettingsChange()" style="font-size:12px;"></textarea>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">CC List (optional)</label>
+        <input type="text" id="ai_set_cc" placeholder="cfo@joinmoxie.com" oninput="aiSettingsChange()" style="font-size:12px;">
+      </div>
+      <div style="background:#FFFDE7;border:1px solid #F9A825;border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--gray-dark);">
+        <strong>⚙️ One-time setup:</strong> Add API keys in your Vercel project settings (Environment Variables): <code>ANTHROPIC_API_KEY</code>, <code>SLACK_WEBHOOK_URL</code>, <code>SENDGRID_API_KEY</code>, <code>SENDGRID_FROM_EMAIL</code>, <code>GOOGLE_SERVICE_ACCOUNT_JSON</code>, <code>GDRIVE_FOLDER_ID</code>. See README in the repo.
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ===================== PROCESS FLOW ===================== -->
@@ -2408,6 +2611,8 @@ function switchTab(name) {
   if (name === 'budget')      renderBudget();
   if (name === 'processflow') loadProcessFlow();
   if (name === 'proposal')    loadExistingProposalUrl();
+  if (name === 'aiassistant') aiLoadSettings();
+  if (name === 'workstreams') renderWorkstreams();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -4885,6 +5090,222 @@ function deleteMeeting(id) {
 // ═══════════════════════════════════════════════════════
 // DASHBOARD
 // ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// TEAM INFERENCE — group owners into teams by name patterns
+// ═══════════════════════════════════════════════════════
+const TEAM_RULES = [
+  { team: 'Moxie · Strategy',    color:'#6B4EFF', match: /jennifer|jen\b|denton/i },
+  { team: 'Moxie · Ops',         color:'#00BFA6', match: /leslie|ceejay|cj\b|ben\s+\(?moxie\)?/i },
+  { team: 'Moxie · Product',     color:'#1565C0', match: /product|miki|addison/i },
+  { team: 'Moxie · PSM',         color:'#F57C00', match: /psm\s*team|psm/i },
+  { team: 'Moxie · Sales',       color:'#E53935', match: /sales|sales\s*lead/i },
+  { team: 'Moxie · Marketing',   color:'#AD1457', match: /marketing/i },
+  { team: 'Layer',               color:'#2E7D32', match: /layer|sol\s*torres|sol\b|ben\s+\(layer\)/i },
+  { team: 'Leadership',          color:'#37474F', match: /leadership|cfo|ceo|exec/i },
+];
+function inferTeam(ownerStr) {
+  const s = (ownerStr || '').trim();
+  if (!s) return 'Unassigned';
+  for (const r of TEAM_RULES) if (r.match.test(s)) return r.team;
+  return 'Other';
+}
+function teamColor(team) {
+  const r = TEAM_RULES.find(x => x.team === team);
+  return r ? r.color : '#607D8B';
+}
+function expandOwners(ownerStr) {
+  // "Jennifer / Leslie / Layer" → ["Jennifer", "Leslie", "Layer"]
+  return (ownerStr || '').split(/[/&,;]| and /i).map(s => s.trim()).filter(Boolean);
+}
+
+// ═══════════════════════════════════════════════════════
+// TEAM ROSTER (dashboard)
+// ═══════════════════════════════════════════════════════
+function renderTeamRoster() {
+  const el = document.getElementById('dashTeamRoster');
+  if (!el) return;
+
+  // Build a map: team → Set of owner names
+  const map = {};
+  const allOwners = new Set();
+  (project.tasks || []).forEach(t => expandOwners(t.owner).forEach(o => allOwners.add(o)));
+  (project.actionItems || []).forEach(a => expandOwners(a.owner).forEach(o => allOwners.add(o)));
+  (project.milestones || []).forEach(m => {
+    const ownerStr = (m.notes || '').match(/Owners?:\s*([^\.]+)/i);
+    if (ownerStr) expandOwners(ownerStr[1]).forEach(o => allOwners.add(o));
+  });
+  (project.people || []).forEach(p => { if (p.name) allOwners.add(p.name); });
+
+  allOwners.forEach(name => {
+    const team = inferTeam(name);
+    if (!map[team]) map[team] = new Set();
+    map[team].add(name);
+  });
+
+  const orderedTeams = TEAM_RULES.map(r => r.team).filter(t => map[t]);
+  if (map['Other'])      orderedTeams.push('Other');
+  if (map['Unassigned']) orderedTeams.push('Unassigned');
+
+  if (orderedTeams.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:13px;">No owners yet. Add tasks or action items with owners to populate.</div>';
+    return;
+  }
+
+  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">' +
+    orderedTeams.map(team => {
+      const members = [...map[team]].sort();
+      const color = teamColor(team);
+      // Count tasks / AIs owned by anyone on this team
+      const taskCount = (project.tasks || []).filter(t => expandOwners(t.owner).some(o => members.includes(o))).length;
+      const aiCount   = (project.actionItems || []).filter(a => a.status !== 'Done' && expandOwners(a.owner).some(o => members.includes(o))).length;
+      return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--white);overflow:hidden;">
+        <div style="background:${color};color:#fff;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-weight:700;font-size:12px;">${escHtml(team)}</span>
+          <span style="font-size:11px;opacity:.9;">${members.length} member${members.length!==1?'s':''}</span>
+        </div>
+        <div style="padding:10px 12px;">
+          ${members.slice(0,8).map(n => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;">
+            <span style="width:24px;height:24px;border-radius:50%;background:${color}25;color:${color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0;">${(n.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2))}</span>
+            <span>${escHtml(n)}</span>
+          </div>`).join('')}
+          ${members.length>8 ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">+${members.length-8} more</div>` : ''}
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--text-secondary);display:flex;gap:10px;">
+            <span><strong style="color:${color};">${taskCount}</strong> tasks</span>
+            <span><strong style="color:${color};">${aiCount}</strong> open AIs</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('') + '</div>';
+}
+
+// ═══════════════════════════════════════════════════════
+// WORKSTREAMS TAB
+// ═══════════════════════════════════════════════════════
+function renderWorkstreams() {
+  const root = document.getElementById('workstreamsView');
+  if (!root) return;
+  if (!hasProject) { root.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text-secondary);">Open a project to see workstreams.</div>'; return; }
+  const ms    = project.milestones || [];
+  const tasks = project.tasks || [];
+  const ais   = project.actionItems || [];
+  const risks = project.risks || [];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayMs = today.getTime();
+
+  if (ms.length === 0) {
+    root.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text-secondary);">No milestones yet — add some in the 🗂 Plan tab to see workstreams.</div>';
+    return;
+  }
+
+  // Header summary
+  const totalTasks = tasks.length;
+  const doneTasks  = tasks.filter(t => t.status === 'Done').length;
+  const totalAIs   = ais.length;
+  const openAIs    = ais.filter(a => a.status !== 'Done').length;
+  const header = `
+    <div class="stats-grid" style="margin-bottom:18px;">
+      <div class="stat-card"><div class="stat-num" style="color:var(--purple);">${ms.length}</div><div class="stat-label">Workstreams</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--teal);">${doneTasks}/${totalTasks}</div><div class="stat-label">Tasks Done</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--orange);">${openAIs}/${totalAIs}</div><div class="stat-label">Open AIs</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--red);">${tasks.filter(t => t.flaggedRisk).length}</div><div class="stat-label">Flagged Tasks</div></div>
+    </div>`;
+
+  // Per-workstream cards
+  const cards = ms.slice().sort((a,b) => (a.date||'').localeCompare(b.date||'')).map(m => {
+    const mTasks    = tasks.filter(t => t.milestoneId === m.id);
+    const mDone     = mTasks.filter(t => t.status === 'Done').length;
+    const mPastDue  = mTasks.filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() < todayMs).length;
+    const mFlagged  = mTasks.filter(t => t.flaggedRisk).length;
+    const mAIs      = ais.filter(a => a.milestoneId === m.id);
+    const mOpenAIs  = mAIs.filter(a => a.status !== 'Done').length;
+    const pct       = mTasks.length ? Math.round((mDone/mTasks.length)*100) : 0;
+
+    // Owners on this workstream
+    const ownerNames = new Set();
+    mTasks.forEach(t => expandOwners(t.owner).forEach(o => ownerNames.add(o)));
+    mAIs.forEach(a => expandOwners(a.owner).forEach(o => ownerNames.add(o)));
+    const teams = {};
+    [...ownerNames].forEach(n => { const t = inferTeam(n); if (!teams[t]) teams[t] = []; teams[t].push(n); });
+    const teamBadges = Object.keys(teams).map(t => `<span style="background:${teamColor(t)};color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-right:4px;">${escHtml(t)} · ${teams[t].length}</span>`).join('');
+
+    // Status color
+    const cfg = (MS_STATUS_CONFIG && MS_STATUS_CONFIG[m.status]) || { dot:'#607D8B' };
+
+    // Top open AIs (max 3)
+    const topAIs = mAIs.filter(a => a.status !== 'Done').slice(0, 3);
+
+    // Date
+    const dateFmt = m.date ? new Date(m.date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+    const daysOut = m.date ? Math.round((new Date(m.date+'T00:00:00').getTime() - todayMs)/(1000*60*60*24)) : null;
+    const daysBadge = daysOut === null ? '' : daysOut < 0
+      ? `<span style="color:var(--red);font-weight:700;font-size:11px;">${Math.abs(daysOut)}d overdue</span>`
+      : daysOut === 0 ? `<span style="color:var(--orange);font-weight:700;font-size:11px;">Due today</span>`
+      : `<span style="color:var(--text-secondary);font-size:11px;">In ${daysOut}d</span>`;
+
+    return `
+    <div style="border:2px solid ${cfg.dot};border-radius:var(--radius);margin-bottom:16px;background:var(--white);overflow:hidden;">
+      <div style="background:${cfg.dot}18;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid ${cfg.dot}40;">
+        <div style="width:14px;height:14px;border-radius:50%;background:${cfg.dot};flex-shrink:0;"></div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:800;font-size:15px;color:var(--gray-dark);">${escHtml(m.name)}</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">📅 ${dateFmt} · ${daysBadge} · ${escHtml(m.status||'Not Started')}</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="switchTab('milestones')" style="font-size:11px;">Open in Plan →</button>
+      </div>
+      <div style="padding:14px 16px;">
+        <!-- Progress bar -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;min-width:90px;">Progress</span>
+          <div style="flex:1;height:10px;background:var(--gray-light);border-radius:5px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${cfg.dot};border-radius:5px;transition:width .4s;"></div>
+          </div>
+          <span style="font-size:13px;font-weight:700;min-width:60px;text-align:right;">${pct}% · ${mDone}/${mTasks.length}</span>
+        </div>
+
+        <!-- Inline KPIs -->
+        <div style="display:flex;gap:18px;font-size:12px;color:var(--text-secondary);margin-bottom:10px;flex-wrap:wrap;">
+          <span>📋 <strong style="color:var(--text);">${mTasks.length}</strong> tasks</span>
+          <span>✅ <strong style="color:var(--green);">${mDone}</strong> done</span>
+          <span>${mPastDue ? '🔴' : '⚪'} <strong style="color:${mPastDue?'var(--red)':'var(--text)'};">${mPastDue}</strong> past due</span>
+          <span>🚩 <strong style="color:${mFlagged?'var(--red)':'var(--text)'};">${mFlagged}</strong> flagged</span>
+          <span>⚡ <strong style="color:${mOpenAIs?'var(--orange)':'var(--text)'};">${mOpenAIs}</strong> open AIs</span>
+        </div>
+
+        <!-- Teams -->
+        ${teamBadges ? `<div style="margin-bottom:10px;">${teamBadges}</div>` : ''}
+
+        <!-- Top open action items -->
+        ${topAIs.length ? `
+          <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">
+            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Next 3 open action items</div>
+            ${topAIs.map(a => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${a.priority==='Critical'?'var(--red)':a.priority==='High'?'var(--orange)':'var(--text-secondary)'};flex-shrink:0;"></span>
+              <span style="flex:1;color:var(--text);">${escHtml(a.item||'—')}</span>
+              <span style="color:var(--text-secondary);font-size:11px;">${escHtml(a.owner||'—')}</span>
+              <span style="color:var(--text-secondary);font-size:11px;">${a.dueDate||''}</span>
+            </div>`).join('')}
+          </div>
+        ` : ''}
+
+        ${m.notes ? `<div style="margin-top:10px;font-size:12px;color:var(--text-secondary);font-style:italic;">${escHtml(m.notes)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Unassigned section (tasks/AIs without milestoneId)
+  const unTasks = tasks.filter(t => !t.milestoneId);
+  const unAIs   = ais.filter(a => !a.milestoneId);
+  const unassignedBlock = (unTasks.length + unAIs.length) > 0 ? `
+    <div style="border:1px dashed var(--text-secondary);border-radius:var(--radius);padding:14px 16px;background:var(--gray-light);margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <strong style="font-size:13px;color:var(--text-secondary);">⚪ Unassigned</strong>
+        <span style="font-size:12px;color:var(--text-secondary);">${unTasks.length} tasks · ${unAIs.filter(a=>a.status!=='Done').length} open AIs</span>
+      </div>
+      <div style="font-size:12px;color:var(--text-secondary);">Move these into a workstream from the 🗂 Plan tab using the Phase dropdown on each row.</div>
+    </div>` : '';
+
+  root.innerHTML = header + cards + unassignedBlock;
+}
 function updateDashboard() {
   if (!hasProject) {
     document.getElementById('noProjectBanner').style.display = 'block';
@@ -4970,6 +5391,9 @@ function updateDashboard() {
     </div>`;
   }).join('');
   document.getElementById('dashStakeholders').innerHTML = stakeholderHTML;
+
+  // Team Roster — groups all owners (from tasks, AIs, milestones, people) by inferred team
+  renderTeamRoster();
 
   // Flagged risks
   const flagged = project.risks.filter(r => r.status !== 'Closed');
@@ -5434,6 +5858,234 @@ async function renderMermaidDiagram() {
   } catch (e) {
     target.innerHTML = '<div style="color:var(--red);text-align:left;font-size:12px;"><strong>Diagram error:</strong><br>' +
                        (e.message || String(e)).replace(/</g,'&lt;') + '</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// AI ASSISTANT — talks to /api/ai-assistant on your Vercel deployment
+// ═══════════════════════════════════════════════════════
+const AI_API_URL = '/api/ai-assistant'; // Vercel serverless function
+
+// ── Settings ────────────────────────────────────────
+function aiLoadSettings() {
+  const s = (project.aiSettings) || {};
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  set('ai_set_slackchannel', s.slackChannel);
+  set('ai_set_fromname',     s.fromName);
+  set('ai_set_recipients',   (s.recipients || []).join(', '));
+  set('ai_set_cc',           (s.cc || []).join(', '));
+}
+function aiSettingsChange() {
+  if (!project.aiSettings) project.aiSettings = {};
+  project.aiSettings.slackChannel = document.getElementById('ai_set_slackchannel').value.trim();
+  project.aiSettings.fromName     = document.getElementById('ai_set_fromname').value.trim();
+  project.aiSettings.recipients   = document.getElementById('ai_set_recipients').value.split(',').map(s=>s.trim()).filter(Boolean);
+  project.aiSettings.cc           = document.getElementById('ai_set_cc').value.split(',').map(s=>s.trim()).filter(Boolean);
+  project.aiSettings.savedAt      = new Date().toISOString();
+  triggerAutoSave();
+}
+
+// ── Helpers ─────────────────────────────────────────
+function aiSetStatus(elId, text, kind) {
+  const el = document.getElementById(elId); if (!el) return;
+  const c = kind === 'error' ? 'var(--red)' : kind === 'ok' ? 'var(--green)' : 'var(--text-secondary)';
+  el.style.color = c;
+  el.textContent = text;
+}
+function aiSetGlobalBadge(text, kind) {
+  const el = document.getElementById('ai_status_badge'); if (!el) return;
+  if (!text) { el.style.display = 'none'; return; }
+  el.style.display = 'inline-block';
+  el.textContent = text;
+}
+
+async function aiCallApi(action, payload) {
+  // Always send current project state + settings so the function has full context
+  const body = {
+    action,
+    payload,
+    project: {
+      name:         project.name,
+      lead:         project.lead,
+      dueDate:      project.dueDate,
+      description:  project.description,
+      milestones:   project.milestones || [],
+      tasks:        project.tasks || [],
+      actionItems:  project.actionItems || [],
+      risks:        project.risks || [],
+      decisions:    project.decisions || [],
+      meetings:     project.meetings || [],
+      ragStatus:    project.ragStatus || {},
+      processFlow:  project.processFlow || {},
+    },
+    settings: project.aiSettings || {},
+    fbProjectId: (typeof fbProjectId !== 'undefined') ? fbProjectId : null,
+  };
+  const res = await fetch(AI_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`API ${res.status}: ${text}`);
+  }
+  return await res.json();
+}
+
+// ── 1. GENERATE DECK ────────────────────────────────
+async function aiGenerateDeck() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const title = document.getElementById('ai_deck_title').value.trim();
+  const focus = document.getElementById('ai_deck_focus').value.trim();
+  const distribution = {
+    drive: document.getElementById('ai_deck_drive').checked,
+    slack: document.getElementById('ai_deck_slack').checked,
+    email: document.getElementById('ai_deck_email').checked,
+  };
+  aiSetStatus('ai_deck_result', '⏳ Drafting deck — this takes 15–30s...', 'info');
+  aiSetGlobalBadge('🤖 Generating deck...', 'info');
+  try {
+    const r = await aiCallApi('generate-deck', { title, focus, distribution });
+    if (r.driveLink) {
+      aiSetStatus('ai_deck_result', `✓ Deck ready — ${r.driveLink}`, 'ok');
+    } else {
+      aiSetStatus('ai_deck_result', '✓ Deck generated.', 'ok');
+    }
+    if (r.notifications) {
+      const sent = [];
+      if (r.notifications.slack) sent.push('Slack ✓');
+      if (r.notifications.email) sent.push(`Email ✓ (${r.notifications.email} recipients)`);
+      if (sent.length) showToast('Sent: ' + sent.join(' · '));
+    }
+    aiSetGlobalBadge('', 'info');
+  } catch (e) {
+    aiSetStatus('ai_deck_result', '✗ ' + e.message, 'error');
+    aiSetGlobalBadge('⚠️ ' + e.message, 'error');
+  }
+}
+
+// ── 2. PROCESS TRANSCRIPT ──────────────────────────
+async function aiProcessTranscript() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const title = document.getElementById('ai_tx_title').value.trim();
+  const transcript = document.getElementById('ai_tx_text').value.trim();
+  if (!transcript || transcript.length < 50) { showToast('Paste a transcript first.', 'error'); return; }
+  const extract = {
+    actions:   document.getElementById('ai_tx_actions').checked,
+    decisions: document.getElementById('ai_tx_decisions').checked,
+    risks:     document.getElementById('ai_tx_risks').checked,
+    summary:   document.getElementById('ai_tx_summary').checked,
+  };
+  aiSetStatus('ai_tx_result', '⏳ Reading transcript with Claude...', 'info');
+  aiSetGlobalBadge('🤖 Processing transcript...', 'info');
+  try {
+    const r = await aiCallApi('process-transcript', { title, transcript, extract });
+    // r.extracted = { actionItems: [...], decisions: [...], risks: [...], summary: '' }
+    let added = { ai: 0, dec: 0, risk: 0, summary: false };
+    if (r.extracted && Array.isArray(r.extracted.actionItems)) {
+      r.extracted.actionItems.forEach(a => {
+        project.actionItems.push({
+          id: aiIdCounter++, milestoneId: null,
+          item: a.item || '', owner: a.owner || '', dueDate: a.dueDate || '',
+          priority: a.priority || 'Medium', source: title || 'Meeting transcript',
+          status: 'Open', createdAt: new Date().toISOString(), notes: a.notes || ''
+        });
+        added.ai++;
+      });
+    }
+    if (r.extracted && Array.isArray(r.extracted.decisions)) {
+      if (!project.decisions) project.decisions = [];
+      r.extracted.decisions.forEach(d => {
+        project.decisions.push({
+          id: decisionIdCounter++,
+          decision: d.decision || '', context: d.context || '',
+          owner: d.owner || '', date: d.date || new Date().toISOString().slice(0,10),
+          source: title || 'Meeting transcript',
+        });
+        added.dec++;
+      });
+    }
+    if (r.extracted && Array.isArray(r.extracted.risks)) {
+      if (!project.risks) project.risks = [];
+      r.extracted.risks.forEach(rk => {
+        project.risks.push({
+          id: riskIdCounter++,
+          risk: rk.risk || '', category: rk.category || '',
+          likelihood: rk.likelihood || 'Medium', impact: rk.impact || 'Medium',
+          mitigation: rk.mitigation || '', owner: rk.owner || '', status: 'Open',
+        });
+        added.risk++;
+      });
+    }
+    if (r.extracted && r.extracted.summary && extract.summary) {
+      if (!project.meetings) project.meetings = [];
+      project.meetings.push({
+        id: meetingIdCounter++,
+        title: title || 'Meeting',
+        date: new Date().toISOString().slice(0,10),
+        attendees: r.extracted.attendees || '',
+        notes: r.extracted.summary,
+      });
+      added.summary = true;
+    }
+    renderActionItems(); renderRisks(); renderDecisions(); renderMeetings(); renderMilestones(); updateDashboard();
+    triggerAutoSave();
+    const parts = [];
+    if (added.ai)      parts.push(`${added.ai} action items`);
+    if (added.dec)     parts.push(`${added.dec} decisions`);
+    if (added.risk)    parts.push(`${added.risk} risks`);
+    if (added.summary) parts.push('summary added');
+    aiSetStatus('ai_tx_result', `✓ Added: ${parts.join(' · ') || 'nothing extracted'}`, 'ok');
+    aiSetGlobalBadge('', 'info');
+  } catch (e) {
+    aiSetStatus('ai_tx_result', '✗ ' + e.message, 'error');
+    aiSetGlobalBadge('⚠️ ' + e.message, 'error');
+  }
+}
+
+// ── 3. SEND STATUS UPDATE ──────────────────────────
+async function aiSendStatusUpdate() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const audience = document.getElementById('ai_su_audience').value;
+  const cadence  = document.getElementById('ai_su_cadence').value;
+  const channels = {
+    slack: document.getElementById('ai_su_slack').checked,
+    email: document.getElementById('ai_su_email').checked,
+  };
+  if (!channels.slack && !channels.email) { showToast('Pick at least one channel.', 'error'); return; }
+  aiSetStatus('ai_su_result', '⏳ Drafting status update...', 'info');
+  aiSetGlobalBadge('🤖 Drafting update...', 'info');
+  try {
+    const r = await aiCallApi('send-status', { audience, cadence, channels });
+    const sent = [];
+    if (r.notifications && r.notifications.slack) sent.push('Slack ✓');
+    if (r.notifications && r.notifications.email) sent.push(`Email ✓ (${r.notifications.email} recipients)`);
+    aiSetStatus('ai_su_result', `✓ Sent: ${sent.join(' · ') || 'no destinations'}`, 'ok');
+    aiSetGlobalBadge('', 'info');
+  } catch (e) {
+    aiSetStatus('ai_su_result', '✗ ' + e.message, 'error');
+    aiSetGlobalBadge('⚠️ ' + e.message, 'error');
+  }
+}
+
+// ── 4. QUICK MESSAGE ───────────────────────────────
+async function aiQuickSend(channel) {
+  const subject = document.getElementById('ai_qm_subject').value.trim();
+  const body    = document.getElementById('ai_qm_body').value.trim();
+  const polish  = document.getElementById('ai_qm_polish').checked;
+  if (!body) { showToast('Write a message first.', 'error'); return; }
+  if (channel === 'email' && !subject) { showToast('Email needs a subject.', 'error'); return; }
+  aiSetStatus('ai_qm_result', '⏳ Sending...', 'info');
+  try {
+    const r = await aiCallApi('quick-send', { channel, subject, body, polish });
+    aiSetStatus('ai_qm_result', `✓ ${channel === 'slack' ? 'Posted to Slack' : 'Email sent'}.`, 'ok');
+    if (r.finalText && polish) {
+      // Show what was actually sent (post-polish)
+      document.getElementById('ai_qm_body').value = r.finalText;
+    }
+  } catch (e) {
+    aiSetStatus('ai_qm_result', '✗ ' + e.message, 'error');
   }
 }
 
