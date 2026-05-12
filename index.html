@@ -3221,7 +3221,20 @@ function renderTasks() {
     filtered = filtered.filter(t => t.status === statusVal);
   }
   if (categoryVal) filtered = filtered.filter(t => t.category === categoryVal);
-  if (ownerVal)    filtered = filtered.filter(t => (t.owner || '').toLowerCase() === ownerVal.toLowerCase());
+  if (ownerVal) {
+    // If ownerVal is a team label, filter by all owners on that team (via inferTeams).
+    // Else fall back to exact name match (case-insensitive, substring) so "Jen" matches "Jennifer".
+    const isTeam = STAKEHOLDER_LIST.some(s => s.label === ownerVal);
+    if (isTeam) {
+      filtered = filtered.filter(t => {
+        const owners = (t.owner || '').split(/[/&,;]| and /i).map(o => o.trim()).filter(Boolean);
+        return owners.some(o => inferTeams(o).includes(ownerVal)) ||
+               (t.owner || '').toLowerCase().includes(ownerVal.toLowerCase());
+      });
+    } else {
+      filtered = filtered.filter(t => (t.owner || '').toLowerCase().includes(ownerVal.toLowerCase()));
+    }
+  }
 
   // Update count badge
   const countEl = document.getElementById('taskFilterCount');
@@ -3317,27 +3330,63 @@ function refreshFilterOptions() {
     TASK_CATEGORIES.filter(c => usedCats.has(c))
       .map(c => `<option value="${c}" ${curCat===c?'selected':''}>${c}</option>`).join('');
 
-  // Owner — union of project.people names and unique task owners
-  const names = new Set();
-  (project.people || []).forEach(p => { if (p.name) names.add(p.name); });
-  project.tasks.forEach(t => { if (t.owner) names.add(t.owner); });
-  ownerEl.innerHTML = '<option value="">All Owners</option>' +
-    [...names].sort().map(n => `<option value="${n}" ${curOwner===n?'selected':''}>${n}</option>`).join('');
+  // Owner filter — teams at top, then individual people
+  const teamLabels = STAKEHOLDER_LIST.map(s => s.label);
+  const personSet = new Set();
+  (project.people || []).forEach(p => { if (p.name) personSet.add(p.name); });
+  project.tasks.forEach(t => {
+    if (t.owner) t.owner.split(/[/&,;]| and /i).forEach(o => { const x = o.trim(); if (x) personSet.add(x); });
+  });
+  // Strip teams out of people to avoid duplicates
+  const teamLower = new Set(teamLabels.map(t => t.toLowerCase()));
+  const people = [...personSet].filter(p => !teamLower.has(p.toLowerCase())).sort();
+
+  ownerEl.innerHTML =
+    '<option value="">All Owners</option>' +
+    '<optgroup label="By Team">' +
+      teamLabels.map(t => `<option value="${t}" ${curOwner===t?'selected':''}>${t}</option>`).join('') +
+    '</optgroup>' +
+    (people.length
+      ? '<optgroup label="By Person">' +
+          people.map(n => `<option value="${n}" ${curOwner===n?'selected':''}>${n}</option>`).join('') +
+        '</optgroup>'
+      : '');
 }
 
 function refreshOwnerDatalist() {
   const dl = document.getElementById('ownerDatalist');
   if (!dl) return;
-  const names = new Set();
-  // Include people from project.people (which includes synced stakeholders)
-  (project.people || []).forEach(p => { if (p.name) names.add(p.name); });
-  // Also pull directly from stakeholders that have a contactName (even if people not yet synced)
+
+  // 1) Team names FIRST (highest-priority suggestions) — from STAKEHOLDER_LIST
+  const teamOptions = STAKEHOLDER_LIST.map(s => {
+    const d = project.stakeholders?.[s.key] || {};
+    // Show team with their contact in parens, if set: "Sales (Rebecca Besch)"
+    const label = (d.included && d.contactName?.trim())
+      ? `${s.label} (${d.contactName.trim()})`
+      : s.label;
+    return label;
+  });
+
+  // 2) Individual people second — from project.people + stakeholder contacts + existing task owners
+  const peopleSet = new Set();
+  (project.people || []).forEach(p => { if (p.name) peopleSet.add(p.name); });
   STAKEHOLDER_LIST.forEach(s => {
     const d = project.stakeholders?.[s.key] || {};
-    if (d.included && d.contactName?.trim()) names.add(d.contactName.trim());
+    if (d.included && d.contactName?.trim()) peopleSet.add(d.contactName.trim());
   });
-  project.tasks.forEach(t => { if (t.owner) names.add(t.owner); });
-  dl.innerHTML = [...names].sort().map(n => `<option value="${n}">`).join('');
+  project.tasks.forEach(t => {
+    if (t.owner) t.owner.split(/[/&,;]| and /i).forEach(o => { const x = o.trim(); if (x) peopleSet.add(x); });
+  });
+  // Strip out anything that's already in teamOptions to avoid duplicates
+  const teamLower = new Set(teamOptions.map(t => t.toLowerCase()));
+  const people = [...peopleSet].filter(p => !teamLower.has(p.toLowerCase())).sort();
+
+  // Combine: teams at top (in stakeholder order), then a divider option, then sorted people
+  const items = [
+    ...teamOptions,
+    ...(people.length ? [`— Individuals —`, ...people] : []),
+  ];
+  dl.innerHTML = items.map(n => `<option value="${n}">`).join('');
 }
 
 function applyTaskFilters() {
@@ -3997,7 +4046,6 @@ function renderMilestones() {
     return all.map(a => {
       const isDone = a.status === 'Done';
       const duePast = a.dueDate && !isDone && new Date(a.dueDate+'T00:00:00').getTime() < todayMs;
-      const dueFmt = a.dueDate ? new Date(a.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—';
       const pcfg = AI_PRIORITY_CONFIG[a.priority]||AI_PRIORITY_CONFIG.Medium;
       return `<tr style="border-bottom:1px solid var(--border);${isDone?'opacity:.45;':''}${duePast?'background:#FFF5F5;':''}">
         <td style="padding:6px 8px;text-align:center;">
@@ -4011,8 +4059,19 @@ function renderMilestones() {
             onchange="updateAiField(${a.id},'owner',this.value.trim())"
             style="border:none;background:transparent;font-size:12px;width:90px;padding:0;outline:none;">
         </td>
-        <td style="padding:6px 8px;${duePast?'color:var(--red);font-weight:700;':''}font-size:12px;">${dueFmt}</td>
-        <td style="padding:6px 8px;"><span style="font-size:10px;font-weight:600;border-radius:3px;padding:2px 5px;${pcfg.badge}">${pcfg.label}</span></td>
+        <td style="padding:6px 8px;">
+          <input type="date" value="${a.dueDate||''}" onchange="updateAiField(${a.id},'dueDate',this.value);renderMilestones();"
+            style="border:none;background:transparent;font-size:12px;padding:0;outline:none;cursor:pointer;width:110px;${duePast?'color:var(--red);font-weight:700;':''}"
+            title="Click to set due date">
+        </td>
+        <td style="padding:6px 8px;">
+          <select class="inline-select" style="font-size:11px;font-weight:600;border-radius:3px;padding:2px 5px;${pcfg.badge}"
+            onchange="updateAiField(${a.id},'priority',this.value);renderMilestones();">
+            ${['Critical','High','Medium','Low'].map(p =>
+              `<option value="${p}" ${a.priority===p?'selected':''}>${p}</option>`
+            ).join('')}
+          </select>
+        </td>
         <td style="padding:6px 8px;">
           <select class="inline-select" style="font-size:12px;max-width:150px;" title="Move to phase"
             onchange="setAiMilestone(${a.id}, this.value === '' ? null : Number(this.value))">
