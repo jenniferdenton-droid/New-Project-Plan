@@ -5091,17 +5091,23 @@ function deleteMeeting(id) {
 // DASHBOARD
 // ═══════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════
-// TEAM INFERENCE — group owners into teams by name patterns
+// TEAM INFERENCE — group owners into teams (workstreams)
+// Customize TEAM_RULES below to match your org structure.
+// Each rule matches owner names (case-insensitive) to a team.
+// First matching rule wins; "Other" catches anything else.
 // ═══════════════════════════════════════════════════════
 const TEAM_RULES = [
-  { team: 'Moxie · Strategy',    color:'#6B4EFF', match: /jennifer|jen\b|denton/i },
-  { team: 'Moxie · Ops',         color:'#00BFA6', match: /leslie|ceejay|cj\b|ben\s+\(?moxie\)?/i },
-  { team: 'Moxie · Product',     color:'#1565C0', match: /product|miki|addison/i },
-  { team: 'Moxie · PSM',         color:'#F57C00', match: /psm\s*team|psm/i },
-  { team: 'Moxie · Sales',       color:'#E53935', match: /sales|sales\s*lead/i },
-  { team: 'Moxie · Marketing',   color:'#AD1457', match: /marketing/i },
-  { team: 'Layer',               color:'#2E7D32', match: /layer|sol\s*torres|sol\b|ben\s+\(layer\)/i },
-  { team: 'Leadership',          color:'#37474F', match: /leadership|cfo|ceo|exec/i },
+  { team: 'Sales',            icon:'💼', color:'#E53935', match: /\bsales\b|account\s*exec|ae\b|bdr\b|sdr\b/i },
+  { team: 'Onboarding / PSM', icon:'🚀', color:'#F57C00', match: /onboarding|psm|provider\s*success|ceejay|cj\b/i },
+  { team: 'Product',          icon:'🛠️', color:'#1565C0', match: /\bproduct\b|miki|addison|engineering|eng\b/i },
+  { team: 'Rev Ops',          icon:'📊', color:'#6B4EFF', match: /rev\s*ops|revops|rev\s*operations|data\s*ops/i },
+  { team: 'Customer Success', icon:'🤝', color:'#00838F', match: /customer\s*success|cs\s*team|leslie|cs\b/i },
+  { team: 'Marketing',        icon:'📣', color:'#AD1457', match: /marketing|brand|comms|content/i },
+  { team: 'Vendor — Layer',   icon:'🔌', color:'#2E7D32', match: /layer|sol\s*torres|sol\b|ben\s*\(layer\)/i },
+  { team: 'Strategy / Lead',  icon:'🎯', color:'#1F1A47', match: /strategy|jennifer|jen\b|denton/i },
+  { team: 'Leadership',       icon:'⚡', color:'#37474F', match: /leadership|cfo|ceo|coo|exec|founder/i },
+  { team: 'Finance',          icon:'💰', color:'#827717', match: /finance|controller|accounting|billing\s*team/i },
+  { team: 'Legal / Compliance', icon:'⚖️', color:'#4A148C', match: /legal|compliance|gc\b/i },
 ];
 function inferTeam(ownerStr) {
   const s = (ownerStr || '').trim();
@@ -5179,132 +5185,188 @@ function renderTeamRoster() {
 }
 
 // ═══════════════════════════════════════════════════════
-// WORKSTREAMS TAB
+// WORKSTREAMS TAB — grouped by TEAM (Sales, Onboarding, etc.)
+// Each task/AI shows up in every team that owns it (multi-owner rows appear
+// in multiple workstreams). Edit TEAM_RULES above to add/rename teams.
 // ═══════════════════════════════════════════════════════
 function renderWorkstreams() {
   const root = document.getElementById('workstreamsView');
   if (!root) return;
   if (!hasProject) { root.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text-secondary);">Open a project to see workstreams.</div>'; return; }
-  const ms    = project.milestones || [];
+
   const tasks = project.tasks || [];
   const ais   = project.actionItems || [];
-  const risks = project.risks || [];
+  const ms    = project.milestones || [];
   const today = new Date(); today.setHours(0,0,0,0);
   const todayMs = today.getTime();
 
-  if (ms.length === 0) {
-    root.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text-secondary);">No milestones yet — add some in the 🗂 Plan tab to see workstreams.</div>';
+  if (tasks.length + ais.length === 0) {
+    root.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text-secondary);">No tasks or action items yet — add some to see workstreams populate by team.</div>';
     return;
   }
 
-  // Header summary
+  // ── Build team map: team → { tasks: [...], ais: [...], owners: Set }
+  const teamData = {};
+  function teamFor(taskOrAi) {
+    // Return all teams matching any owner on this row (multi-team allowed)
+    const owners = expandOwners(taskOrAi.owner);
+    const teams = new Set();
+    owners.forEach(o => teams.add(inferTeam(o)));
+    if (teams.size === 0) teams.add('Unassigned');
+    return [...teams];
+  }
+  tasks.forEach(t => {
+    teamFor(t).forEach(team => {
+      if (!teamData[team]) teamData[team] = { tasks: [], ais: [], owners: new Set() };
+      teamData[team].tasks.push(t);
+      expandOwners(t.owner).forEach(o => teamData[team].owners.add(o));
+    });
+  });
+  ais.forEach(a => {
+    teamFor(a).forEach(team => {
+      if (!teamData[team]) teamData[team] = { tasks: [], ais: [], owners: new Set() };
+      teamData[team].ais.push(a);
+      expandOwners(a.owner).forEach(o => teamData[team].owners.add(o));
+    });
+  });
+
+  // ── Header KPIs
+  const totalTeams = Object.keys(teamData).filter(t => t !== 'Unassigned' && t !== 'Other').length;
   const totalTasks = tasks.length;
   const doneTasks  = tasks.filter(t => t.status === 'Done').length;
-  const totalAIs   = ais.length;
   const openAIs    = ais.filter(a => a.status !== 'Done').length;
+  const flagged    = tasks.filter(t => t.flaggedRisk).length;
   const header = `
     <div class="stats-grid" style="margin-bottom:18px;">
-      <div class="stat-card"><div class="stat-num" style="color:var(--purple);">${ms.length}</div><div class="stat-label">Workstreams</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--purple);">${totalTeams}</div><div class="stat-label">Active Teams</div></div>
       <div class="stat-card"><div class="stat-num" style="color:var(--teal);">${doneTasks}/${totalTasks}</div><div class="stat-label">Tasks Done</div></div>
-      <div class="stat-card"><div class="stat-num" style="color:var(--orange);">${openAIs}/${totalAIs}</div><div class="stat-label">Open AIs</div></div>
-      <div class="stat-card"><div class="stat-num" style="color:var(--red);">${tasks.filter(t => t.flaggedRisk).length}</div><div class="stat-label">Flagged Tasks</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--orange);">${openAIs}</div><div class="stat-label">Open AIs</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--red);">${flagged}</div><div class="stat-label">Flagged Tasks</div></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);">Workstream by Team</span>
+      <span style="font-size:11px;color:var(--text-secondary);">Edit team mapping in <code>TEAM_RULES</code></span>
     </div>`;
 
-  // Per-workstream cards
-  const cards = ms.slice().sort((a,b) => (a.date||'').localeCompare(b.date||'')).map(m => {
-    const mTasks    = tasks.filter(t => t.milestoneId === m.id);
-    const mDone     = mTasks.filter(t => t.status === 'Done').length;
-    const mPastDue  = mTasks.filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() < todayMs).length;
-    const mFlagged  = mTasks.filter(t => t.flaggedRisk).length;
-    const mAIs      = ais.filter(a => a.milestoneId === m.id);
-    const mOpenAIs  = mAIs.filter(a => a.status !== 'Done').length;
-    const pct       = mTasks.length ? Math.round((mDone/mTasks.length)*100) : 0;
+  // ── Build team cards in TEAM_RULES order, plus Other / Unassigned at end
+  const ordered = TEAM_RULES.map(r => r.team).filter(t => teamData[t]);
+  if (teamData['Other'])      ordered.push('Other');
+  if (teamData['Unassigned']) ordered.push('Unassigned');
 
-    // Owners on this workstream
-    const ownerNames = new Set();
-    mTasks.forEach(t => expandOwners(t.owner).forEach(o => ownerNames.add(o)));
-    mAIs.forEach(a => expandOwners(a.owner).forEach(o => ownerNames.add(o)));
-    const teams = {};
-    [...ownerNames].forEach(n => { const t = inferTeam(n); if (!teams[t]) teams[t] = []; teams[t].push(n); });
-    const teamBadges = Object.keys(teams).map(t => `<span style="background:${teamColor(t)};color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-right:4px;">${escHtml(t)} · ${teams[t].length}</span>`).join('');
+  const cards = ordered.map(team => {
+    const d = teamData[team];
+    const rule = TEAM_RULES.find(r => r.team === team);
+    const color = rule ? rule.color : (team === 'Unassigned' ? '#607D8B' : '#455A64');
+    const icon  = rule ? rule.icon  : (team === 'Unassigned' ? '⚪' : '⬛');
 
-    // Status color
-    const cfg = (MS_STATUS_CONFIG && MS_STATUS_CONFIG[m.status]) || { dot:'#607D8B' };
+    const tDone     = d.tasks.filter(t => t.status === 'Done').length;
+    const tPastDue  = d.tasks.filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() < todayMs).length;
+    const tFlagged  = d.tasks.filter(t => t.flaggedRisk).length;
+    const aOpen     = d.ais.filter(a => a.status !== 'Done').length;
+    const aCritical = d.ais.filter(a => a.status !== 'Done' && a.priority === 'Critical').length;
+    const pct       = d.tasks.length ? Math.round((tDone/d.tasks.length)*100) : 0;
+    const members   = [...d.owners].sort();
 
-    // Top open AIs (max 3)
-    const topAIs = mAIs.filter(a => a.status !== 'Done').slice(0, 3);
+    // Top 4 open AIs (priority order: Critical > High > Medium > Low)
+    const priorityRank = { Critical:0, High:1, Medium:2, Low:3 };
+    const topAIs = d.ais
+      .filter(a => a.status !== 'Done')
+      .sort((x, y) => (priorityRank[x.priority] ?? 4) - (priorityRank[y.priority] ?? 4))
+      .slice(0, 4);
 
-    // Date
-    const dateFmt = m.date ? new Date(m.date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
-    const daysOut = m.date ? Math.round((new Date(m.date+'T00:00:00').getTime() - todayMs)/(1000*60*60*24)) : null;
-    const daysBadge = daysOut === null ? '' : daysOut < 0
-      ? `<span style="color:var(--red);font-weight:700;font-size:11px;">${Math.abs(daysOut)}d overdue</span>`
-      : daysOut === 0 ? `<span style="color:var(--orange);font-weight:700;font-size:11px;">Due today</span>`
-      : `<span style="color:var(--text-secondary);font-size:11px;">In ${daysOut}d</span>`;
+    // Top 3 open tasks (past due > flagged > soonest due)
+    const topTasks = d.tasks
+      .filter(t => t.status !== 'Done')
+      .sort((x, y) => {
+        const xPast = x.dueDate && new Date(x.dueDate+'T00:00:00').getTime() < todayMs ? 0 : 1;
+        const yPast = y.dueDate && new Date(y.dueDate+'T00:00:00').getTime() < todayMs ? 0 : 1;
+        if (xPast !== yPast) return xPast - yPast;
+        if (x.flaggedRisk !== y.flaggedRisk) return y.flaggedRisk ? 1 : -1;
+        return (x.dueDate || 'z').localeCompare(y.dueDate || 'z');
+      })
+      .slice(0, 3);
+
+    // Milestones that touch this team
+    const teamMs = new Set();
+    d.tasks.forEach(t => { if (t.milestoneId) teamMs.add(t.milestoneId); });
+    d.ais.forEach(a => { if (a.milestoneId) teamMs.add(a.milestoneId); });
+    const msNames = [...teamMs].map(id => (ms.find(m => m.id === id) || {}).name).filter(Boolean);
 
     return `
-    <div style="border:2px solid ${cfg.dot};border-radius:var(--radius);margin-bottom:16px;background:var(--white);overflow:hidden;">
-      <div style="background:${cfg.dot}18;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid ${cfg.dot}40;">
-        <div style="width:14px;height:14px;border-radius:50%;background:${cfg.dot};flex-shrink:0;"></div>
+    <div style="border:2px solid ${color};border-radius:var(--radius);margin-bottom:16px;background:var(--white);overflow:hidden;">
+      <div style="background:${color}18;padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid ${color}40;">
+        <div style="font-size:22px;flex-shrink:0;">${icon}</div>
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:800;font-size:15px;color:var(--gray-dark);">${escHtml(m.name)}</div>
-          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">📅 ${dateFmt} · ${daysBadge} · ${escHtml(m.status||'Not Started')}</div>
+          <div style="font-weight:800;font-size:15px;color:var(--gray-dark);">${escHtml(team)}</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">${members.length} owner${members.length!==1?'s':''} · ${d.tasks.length} task${d.tasks.length!==1?'s':''} · ${aOpen} open AI${aOpen!==1?'s':''}</div>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="switchTab('milestones')" style="font-size:11px;">Open in Plan →</button>
+        ${aCritical ? `<span style="background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;">${aCritical} CRITICAL</span>` : ''}
+        ${tPastDue ? `<span style="background:var(--red-light);color:var(--red);font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;">${tPastDue} PAST DUE</span>` : ''}
       </div>
-      <div style="padding:14px 16px;">
-        <!-- Progress bar -->
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-          <span style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;min-width:90px;">Progress</span>
+      <div style="padding:14px 18px;">
+        <!-- Progress -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+          <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);min-width:90px;">Progress</span>
           <div style="flex:1;height:10px;background:var(--gray-light);border-radius:5px;overflow:hidden;">
-            <div style="height:100%;width:${pct}%;background:${cfg.dot};border-radius:5px;transition:width .4s;"></div>
+            <div style="height:100%;width:${pct}%;background:${color};border-radius:5px;transition:width .4s;"></div>
           </div>
-          <span style="font-size:13px;font-weight:700;min-width:60px;text-align:right;">${pct}% · ${mDone}/${mTasks.length}</span>
+          <span style="font-size:13px;font-weight:700;min-width:70px;text-align:right;">${pct}% · ${tDone}/${d.tasks.length}</span>
         </div>
 
-        <!-- Inline KPIs -->
-        <div style="display:flex;gap:18px;font-size:12px;color:var(--text-secondary);margin-bottom:10px;flex-wrap:wrap;">
-          <span>📋 <strong style="color:var(--text);">${mTasks.length}</strong> tasks</span>
-          <span>✅ <strong style="color:var(--green);">${mDone}</strong> done</span>
-          <span>${mPastDue ? '🔴' : '⚪'} <strong style="color:${mPastDue?'var(--red)':'var(--text)'};">${mPastDue}</strong> past due</span>
-          <span>🚩 <strong style="color:${mFlagged?'var(--red)':'var(--text)'};">${mFlagged}</strong> flagged</span>
-          <span>⚡ <strong style="color:${mOpenAIs?'var(--orange)':'var(--text)'};">${mOpenAIs}</strong> open AIs</span>
+        <!-- KPI strip -->
+        <div style="display:flex;gap:18px;font-size:12px;color:var(--text-secondary);margin-bottom:14px;flex-wrap:wrap;">
+          <span>📋 <strong style="color:var(--text);">${d.tasks.length}</strong> tasks</span>
+          <span>✅ <strong style="color:var(--green);">${tDone}</strong> done</span>
+          <span>${tPastDue?'🔴':'⚪'} <strong style="color:${tPastDue?'var(--red)':'var(--text)'};">${tPastDue}</strong> past due</span>
+          <span>🚩 <strong style="color:${tFlagged?'var(--red)':'var(--text)'};">${tFlagged}</strong> flagged</span>
+          <span>⚡ <strong style="color:${aOpen?'var(--orange)':'var(--text)'};">${aOpen}</strong> open AIs</span>
         </div>
 
-        <!-- Teams -->
-        ${teamBadges ? `<div style="margin-bottom:10px;">${teamBadges}</div>` : ''}
+        <!-- Members -->
+        ${members.length ? `<div style="margin-bottom:14px;">
+          ${members.slice(0,10).map(n => `<span title="${escHtml(n)}" style="display:inline-flex;align-items:center;gap:6px;background:${color}15;color:${color};padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600;margin-right:5px;margin-bottom:4px;">
+            <span style="width:18px;height:18px;border-radius:50%;background:${color};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">${(n.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2))}</span>
+            ${escHtml(n)}
+          </span>`).join('')}
+          ${members.length>10 ? `<span style="font-size:11px;color:var(--text-secondary);">+${members.length-10} more</span>` : ''}
+        </div>` : ''}
 
-        <!-- Top open action items -->
-        ${topAIs.length ? `
-          <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">
-            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Next 3 open action items</div>
-            ${topAIs.map(a => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;">
-              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${a.priority==='Critical'?'var(--red)':a.priority==='High'?'var(--orange)':'var(--text-secondary)'};flex-shrink:0;"></span>
-              <span style="flex:1;color:var(--text);">${escHtml(a.item||'—')}</span>
-              <span style="color:var(--text-secondary);font-size:11px;">${escHtml(a.owner||'—')}</span>
-              <span style="color:var(--text-secondary);font-size:11px;">${a.dueDate||''}</span>
-            </div>`).join('')}
+        <!-- Two columns: top tasks · top AIs -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Top open tasks</div>
+            ${topTasks.length ? topTasks.map(t => {
+              const past = t.dueDate && new Date(t.dueDate+'T00:00:00').getTime() < todayMs;
+              return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border);">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${t.flaggedRisk?'var(--red)':past?'var(--orange)':color};flex-shrink:0;"></span>
+                <span style="flex:1;color:var(--text);">${escHtml(t.task||'—')}</span>
+                <span style="color:${past?'var(--red)':'var(--text-secondary)'};font-size:11px;font-weight:${past?'700':'400'};">${t.dueDate||'—'}</span>
+              </div>`;
+            }).join('') : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;padding:6px 0;">No open tasks</div>'}
           </div>
-        ` : ''}
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Top open action items</div>
+            ${topAIs.length ? topAIs.map(a => {
+              const past = a.dueDate && new Date(a.dueDate+'T00:00:00').getTime() < todayMs;
+              return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border);">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${a.priority==='Critical'?'var(--red)':a.priority==='High'?'var(--orange)':color};flex-shrink:0;"></span>
+                <span style="flex:1;color:var(--text);">${escHtml(a.item||'—')}</span>
+                <span style="color:${past?'var(--red)':'var(--text-secondary)'};font-size:11px;font-weight:${past?'700':'400'};">${a.dueDate||'—'}</span>
+              </div>`;
+            }).join('') : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;padding:6px 0;">No open action items</div>'}
+          </div>
+        </div>
 
-        ${m.notes ? `<div style="margin-top:10px;font-size:12px;color:var(--text-secondary);font-style:italic;">${escHtml(m.notes)}</div>` : ''}
+        <!-- Phase tags (which milestones touch this team) -->
+        ${msNames.length ? `<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--text-secondary);">
+          <strong style="text-transform:uppercase;letter-spacing:.5px;">Phases involved:</strong>
+          ${msNames.map(n => `<span style="display:inline-block;background:var(--gray-light);color:var(--text);padding:2px 8px;border-radius:10px;margin-left:4px;margin-top:2px;font-weight:600;">${escHtml(n)}</span>`).join('')}
+        </div>` : ''}
       </div>
     </div>`;
   }).join('');
 
-  // Unassigned section (tasks/AIs without milestoneId)
-  const unTasks = tasks.filter(t => !t.milestoneId);
-  const unAIs   = ais.filter(a => !a.milestoneId);
-  const unassignedBlock = (unTasks.length + unAIs.length) > 0 ? `
-    <div style="border:1px dashed var(--text-secondary);border-radius:var(--radius);padding:14px 16px;background:var(--gray-light);margin-bottom:16px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-        <strong style="font-size:13px;color:var(--text-secondary);">⚪ Unassigned</strong>
-        <span style="font-size:12px;color:var(--text-secondary);">${unTasks.length} tasks · ${unAIs.filter(a=>a.status!=='Done').length} open AIs</span>
-      </div>
-      <div style="font-size:12px;color:var(--text-secondary);">Move these into a workstream from the 🗂 Plan tab using the Phase dropdown on each row.</div>
-    </div>` : '';
-
-  root.innerHTML = header + cards + unassignedBlock;
+  root.innerHTML = header + cards;
 }
 function updateDashboard() {
   if (!hasProject) {
