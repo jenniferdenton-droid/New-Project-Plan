@@ -1821,6 +1821,7 @@ const STAKEHOLDER_LIST = [
   { key: 'InternalComms', label: 'Internal Comms' },
   { key: 'Product', label: 'Product' },
   { key: 'RevOps', label: 'Rev Ops' },
+  { key: 'External', label: 'External' },
 ];
 
 const STATUSES = ['Not Started', 'In Progress', 'At Risk', 'Done', 'Blocked', 'On Hold'];
@@ -5091,36 +5092,78 @@ function deleteMeeting(id) {
 // DASHBOARD
 // ═══════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════
-// TEAM INFERENCE — group owners into teams (workstreams)
-// Customize TEAM_RULES below to match your org structure.
-// Each rule matches owner names (case-insensitive) to a team.
-// First matching rule wins; "Other" catches anything else.
+// TEAM INFERENCE — data-driven from STAKEHOLDER_LIST + Project Setup
+// Source of truth: project.stakeholders[key].contactName from the
+// Stakeholder Plan on the Project Setup tab. Edit there, not here.
 // ═══════════════════════════════════════════════════════
-const TEAM_RULES = [
-  { team: 'Sales',            icon:'💼', color:'#E53935', match: /\bsales\b|account\s*exec|ae\b|bdr\b|sdr\b/i },
-  { team: 'Onboarding / PSM', icon:'🚀', color:'#F57C00', match: /onboarding|psm|provider\s*success|ceejay|cj\b/i },
-  { team: 'Product',          icon:'🛠️', color:'#1565C0', match: /\bproduct\b|miki|addison|engineering|eng\b/i },
-  { team: 'Rev Ops',          icon:'📊', color:'#6B4EFF', match: /rev\s*ops|revops|rev\s*operations|data\s*ops/i },
-  { team: 'Customer Success', icon:'🤝', color:'#00838F', match: /customer\s*success|cs\s*team|leslie|cs\b/i },
-  { team: 'Marketing',        icon:'📣', color:'#AD1457', match: /marketing|brand|comms|content/i },
-  { team: 'Vendor — Layer',   icon:'🔌', color:'#2E7D32', match: /layer|sol\s*torres|sol\b|ben\s*\(layer\)/i },
-  { team: 'Strategy / Lead',  icon:'🎯', color:'#1F1A47', match: /strategy|jennifer|jen\b|denton/i },
-  { team: 'Leadership',       icon:'⚡', color:'#37474F', match: /leadership|cfo|ceo|coo|exec|founder/i },
-  { team: 'Finance',          icon:'💰', color:'#827717', match: /finance|controller|accounting|billing\s*team/i },
-  { team: 'Legal / Compliance', icon:'⚖️', color:'#4A148C', match: /legal|compliance|gc\b/i },
-];
-function inferTeam(ownerStr) {
+const TEAM_META = {
+  PSM:           { icon:'🚀', color:'#F57C00' },
+  Sales:         { icon:'💼', color:'#E53935' },
+  OpsLeader:     { icon:'🎯', color:'#1F1A47' },
+  Onboarding:    { icon:'🤝', color:'#00838F' },
+  MD:            { icon:'🏥', color:'#0277BD' },
+  Supplies:      { icon:'📦', color:'#5D4037' },
+  Billing:       { icon:'💰', color:'#827717' },
+  Marketing:     { icon:'📣', color:'#AD1457' },
+  InternalComms: { icon:'📢', color:'#6A1B9A' },
+  Product:       { icon:'🛠️', color:'#1565C0' },
+  RevOps:        { icon:'📊', color:'#6B4EFF' },
+  External:      { icon:'🔌', color:'#2E7D32' },
+  Other:         { icon:'⬛', color:'#455A64' },
+  Unassigned:    { icon:'⚪', color:'#607D8B' },
+};
+function teamIcon(label)  { const k = teamKeyByLabel(label); return (TEAM_META[k] || TEAM_META.Other).icon; }
+function teamColor(label) { const k = teamKeyByLabel(label); return (TEAM_META[k] || TEAM_META.Other).color; }
+function teamKeyByLabel(label) {
+  if (label === 'Other' || label === 'Unassigned') return label;
+  const s = STAKEHOLDER_LIST.find(x => x.label === label);
+  return s ? s.key : 'Other';
+}
+
+// Build the per-project mapping from contact name → list of team labels
+// (one person can be on multiple teams — e.g., Shannon = Supplies + Billing)
+function buildOwnerTeamMap() {
+  const map = {};
+  if (!project || !project.stakeholders) return map;
+  STAKEHOLDER_LIST.forEach(s => {
+    const sd = project.stakeholders[s.key];
+    if (!sd) return;
+    const name = (sd.contactName || '').trim().toLowerCase();
+    if (!name) return;
+    if (!map[name]) map[name] = [];
+    if (!map[name].includes(s.label)) map[name].push(s.label);
+  });
+  return map;
+}
+
+function inferTeams(ownerStr) {
+  // Returns ARRAY of team labels (since one owner can be on multiple teams)
   const s = (ownerStr || '').trim();
-  if (!s) return 'Unassigned';
-  for (const r of TEAM_RULES) if (r.match.test(s)) return r.team;
-  return 'Other';
+  if (!s) return ['Unassigned'];
+  const lower = s.toLowerCase();
+
+  // 1) Match by stakeholder contact name (exact, case-insensitive, last-name OR first-name)
+  const ownerMap = buildOwnerTeamMap();
+  if (ownerMap[lower]) return ownerMap[lower];
+  // Also try first-name match (e.g., "Jennifer" matches "Jennifer Denton")
+  for (const fullName in ownerMap) {
+    const parts = fullName.split(/\s+/);
+    if (parts[0] === lower || parts[parts.length - 1] === lower) return ownerMap[fullName];
+  }
+
+  // 2) Match by team label as the owner (e.g., owner field literally says "PSM" or "Sales")
+  for (const team of STAKEHOLDER_LIST) {
+    const labelLower = team.label.toLowerCase();
+    if (lower === labelLower || lower.includes(labelLower) || labelLower.includes(lower.split(/\s+/)[0])) {
+      return [team.label];
+    }
+  }
+
+  // 3) No match → Other
+  return ['Other'];
 }
-function teamColor(team) {
-  const r = TEAM_RULES.find(x => x.team === team);
-  return r ? r.color : '#607D8B';
-}
+function inferTeam(ownerStr) { return inferTeams(ownerStr)[0]; } // back-compat single-team
 function expandOwners(ownerStr) {
-  // "Jennifer / Leslie / Layer" → ["Jennifer", "Leslie", "Layer"]
   return (ownerStr || '').split(/[/&,;]| and /i).map(s => s.trim()).filter(Boolean);
 }
 
@@ -5143,12 +5186,13 @@ function renderTeamRoster() {
   (project.people || []).forEach(p => { if (p.name) allOwners.add(p.name); });
 
   allOwners.forEach(name => {
-    const team = inferTeam(name);
-    if (!map[team]) map[team] = new Set();
-    map[team].add(name);
+    inferTeams(name).forEach(team => {
+      if (!map[team]) map[team] = new Set();
+      map[team].add(name);
+    });
   });
 
-  const orderedTeams = TEAM_RULES.map(r => r.team).filter(t => map[t]);
+  const orderedTeams = STAKEHOLDER_LIST.map(s => s.label).filter(t => map[t]);
   if (map['Other'])      orderedTeams.push('Other');
   if (map['Unassigned']) orderedTeams.push('Unassigned');
 
@@ -5211,7 +5255,7 @@ function renderWorkstreams() {
     // Return all teams matching any owner on this row (multi-team allowed)
     const owners = expandOwners(taskOrAi.owner);
     const teams = new Set();
-    owners.forEach(o => teams.add(inferTeam(o)));
+    owners.forEach(o => inferTeams(o).forEach(t => teams.add(t)));
     if (teams.size === 0) teams.add('Unassigned');
     return [...teams];
   }
@@ -5248,16 +5292,15 @@ function renderWorkstreams() {
       <span style="font-size:11px;color:var(--text-secondary);">Edit team mapping in <code>TEAM_RULES</code></span>
     </div>`;
 
-  // ── Build team cards in TEAM_RULES order, plus Other / Unassigned at end
-  const ordered = TEAM_RULES.map(r => r.team).filter(t => teamData[t]);
+  // ── Build team cards in STAKEHOLDER_LIST order, plus Other / Unassigned at end
+  const ordered = STAKEHOLDER_LIST.map(s => s.label).filter(t => teamData[t]);
   if (teamData['Other'])      ordered.push('Other');
   if (teamData['Unassigned']) ordered.push('Unassigned');
 
   const cards = ordered.map(team => {
     const d = teamData[team];
-    const rule = TEAM_RULES.find(r => r.team === team);
-    const color = rule ? rule.color : (team === 'Unassigned' ? '#607D8B' : '#455A64');
-    const icon  = rule ? rule.icon  : (team === 'Unassigned' ? '⚪' : '⬛');
+    const color = teamColor(team);
+    const icon  = teamIcon(team);
 
     const tDone     = d.tasks.filter(t => t.status === 'Done').length;
     const tPastDue  = d.tasks.filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() < todayMs).length;
