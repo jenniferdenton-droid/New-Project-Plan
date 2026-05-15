@@ -1423,9 +1423,36 @@
           <label>Description / Agenda</label>
           <textarea id="cal_description" rows="3" placeholder="Quick walkthrough of the as-is bookkeeping process. Goal: identify roadblocks."></textarea>
         </div>
+
+        <!-- Recurring meeting controls -->
+        <div class="form-row">
+          <div class="form-group">
+            <label>Repeats</label>
+            <select id="cal_recurrence" onchange="toggleRecurrenceEnd()">
+              <option value="none" selected>Doesn't repeat</option>
+              <option value="DAILY">Daily</option>
+              <option value="WEEKLY">Weekly</option>
+              <option value="BIWEEKLY">Every 2 weeks</option>
+              <option value="MONTHLY">Monthly</option>
+              <option value="WEEKDAYS">Every weekday (Mon–Fri)</option>
+            </select>
+          </div>
+          <div class="form-group" id="cal_recurrence_end_wrap" style="display:none;">
+            <label>Repeat Until (optional)</label>
+            <input type="date" id="cal_recurrence_end">
+          </div>
+        </div>
+
+        <!-- Location + Google Meet -->
         <div class="form-group">
-          <label>Location / Zoom Link</label>
-          <input type="text" id="cal_location" placeholder="https://moxie.zoom.us/... or conference room">
+          <label style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Location / Conference Link</span>
+            <label style="font-size:11px;font-weight:600;color:var(--purple);display:flex;align-items:center;gap:5px;cursor:pointer;">
+              <input type="checkbox" id="cal_add_meet" checked> 📹 Auto-generate Google Meet
+            </label>
+          </label>
+          <input type="text" id="cal_location" placeholder="Leave blank to auto-generate Meet link — or paste Zoom/conference room">
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">When "Auto-generate Google Meet" is on, a fresh Meet link is created and attached to the calendar event.</div>
         </div>
 
         <!-- Auto-populated attendees with checkboxes -->
@@ -1435,8 +1462,11 @@
             <span style="font-size:11px;color:var(--text-secondary);font-weight:500;">From Stakeholder Plan · uncheck to skip</span>
           </label>
           <div id="cal_attendees_grid" style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;max-height:200px;overflow-y:auto;background:var(--gray-light);"></div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);margin-top:10px;display:block;">Additional Attendees (comma-separated emails)</label>
-          <input type="text" id="cal_additional" placeholder="external@partner.com, contractor@vendor.com" style="font-size:12px;margin-top:4px;">
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);margin-top:10px;display:block;">+ Add people not on the list</label>
+          <input type="text" id="cal_additional" placeholder="external@partner.com, contractor@vendor.com  (comma-separated)" style="font-size:12px;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-secondary);margin-top:6px;cursor:pointer;">
+            <input type="checkbox" id="cal_save_to_people"> Also save these to the project's People list
+          </label>
         </div>
 
         <div style="background:var(--gray-light);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px;">
@@ -1473,6 +1503,50 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- IMPORT FROM GOOGLE CALENDAR -->
+  <div class="card" style="margin-top:20px;">
+    <div class="card-header" style="background:linear-gradient(90deg,#FFF3E0,transparent);">
+      <div class="card-title">🔄 Import from My Google Calendar</div>
+      <span style="font-size:11px;color:var(--text-secondary);">Recurring events show once</span>
+    </div>
+    <div class="card-body">
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Pull existing events from your Google Calendar — including recurring meetings — and add them to this project's Meeting Notes.</p>
+
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
+        <div style="flex:1;min-width:160px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Search title</label>
+          <input type="text" id="cal_import_search" placeholder='e.g. "bookkeeping", "Layer", "sync"' style="font-size:12px;">
+        </div>
+        <div style="width:130px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Past (days)</label>
+          <input type="number" id="cal_import_past" value="14" min="0" max="180" style="font-size:12px;">
+        </div>
+        <div style="width:130px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Future (days)</label>
+          <input type="number" id="cal_import_future" value="60" min="0" max="365" style="font-size:12px;">
+        </div>
+        <button class="btn btn-primary" onclick="loadCalendarEvents()">🔄 Fetch Events</button>
+      </div>
+
+      <div id="cal_import_status" style="font-size:12px;color:var(--text-secondary);min-height:18px;margin-bottom:10px;"></div>
+
+      <div id="cal_import_results" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);">Found <span id="cal_import_count">0</span> events · check to import</span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-sm btn-secondary" onclick="toggleSelectAllImports(true)">Select all</button>
+            <button class="btn btn-sm btn-secondary" onclick="toggleSelectAllImports(false)">Deselect all</button>
+          </div>
+        </div>
+        <div id="cal_import_list" style="max-height:380px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--white);"></div>
+        <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+          <button class="btn btn-primary" onclick="importSelectedCalendarEvents()">＋ Import Selected to Project Meetings</button>
+          <span id="cal_import_done_msg" style="font-size:12px;color:var(--green);font-weight:600;"></span>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -6506,18 +6580,28 @@ function renderCalendarUpcoming() {
   }).join('');
 }
 
+function toggleRecurrenceEnd() {
+  const r = document.getElementById('cal_recurrence').value;
+  const wrap = document.getElementById('cal_recurrence_end_wrap');
+  if (wrap) wrap.style.display = (r && r !== 'none') ? '' : 'none';
+}
+
 async function scheduleMeeting() {
   if (!hasProject) { showToast('Open a project first.', 'error'); return; }
-  const title       = document.getElementById('cal_title').value.trim();
-  const date        = document.getElementById('cal_date').value;
-  const startTime   = document.getElementById('cal_start').value;
-  const duration    = parseInt(document.getElementById('cal_duration').value, 10) || 30;
-  const description = document.getElementById('cal_description').value.trim();
-  const location    = document.getElementById('cal_location').value.trim();
-  const additional  = document.getElementById('cal_additional').value.trim();
-  const sendEmail   = document.getElementById('cal_send_email').checked;
-  const postSlack   = document.getElementById('cal_post_slack').checked;
-  const addToMtgs   = document.getElementById('cal_add_to_meetings').checked;
+  const title          = document.getElementById('cal_title').value.trim();
+  const date           = document.getElementById('cal_date').value;
+  const startTime      = document.getElementById('cal_start').value;
+  const duration       = parseInt(document.getElementById('cal_duration').value, 10) || 30;
+  const description    = document.getElementById('cal_description').value.trim();
+  const location       = document.getElementById('cal_location').value.trim();
+  const additional     = document.getElementById('cal_additional').value.trim();
+  const recurrence     = document.getElementById('cal_recurrence').value;
+  const recurrenceEnd  = document.getElementById('cal_recurrence_end').value;
+  const addMeet        = document.getElementById('cal_add_meet').checked;
+  const sendEmail      = document.getElementById('cal_send_email').checked;
+  const postSlack      = document.getElementById('cal_post_slack').checked;
+  const addToMtgs      = document.getElementById('cal_add_to_meetings').checked;
+  const saveToPeople   = document.getElementById('cal_save_to_people').checked;
 
   if (!title || !date || !startTime) { showToast('Title, date, and start time are required.', 'error'); return; }
 
@@ -6527,31 +6611,58 @@ async function scheduleMeeting() {
     attendees.push({ email: cb.dataset.email, name: cb.dataset.name, team: cb.dataset.team });
   });
   // Additional emails
+  const additionalAttendees = [];
   if (additional) {
     additional.split(/[,;]/).map(e => e.trim()).filter(Boolean).forEach(email => {
       if (!attendees.find(a => a.email.toLowerCase() === email.toLowerCase())) {
-        attendees.push({ email, name: '', team: 'External' });
+        const obj = { email, name: '', team: 'External' };
+        attendees.push(obj);
+        additionalAttendees.push(obj);
       }
     });
   }
   if (attendees.length === 0) { showToast('Pick at least one attendee.', 'error'); return; }
+
+  // Optionally save additional emails to the People list
+  if (saveToPeople && additionalAttendees.length > 0) {
+    if (!project.people) project.people = [];
+    additionalAttendees.forEach(a => {
+      const exists = project.people.some(p => (p.email || '').toLowerCase() === a.email.toLowerCase());
+      if (!exists) {
+        project.people.push({
+          id: taskPeopleIdCounter++,
+          name: a.name || a.email.split('@')[0],
+          email: a.email,
+          role: 'External',
+        });
+      }
+    });
+  }
 
   aiSetStatus('cal_result', '⏳ Creating calendar event...', 'info');
   try {
     const r = await aiCallApi('schedule-meeting', {
       title, date, startTime, duration, description, location,
       attendees, sendEmail, postSlack,
+      recurrence: recurrence === 'none' ? null : recurrence,
+      recurrenceEnd: recurrence === 'none' ? null : (recurrenceEnd || null),
+      addMeet,
     });
 
     // Log into project.meetings if requested
     if (addToMtgs) {
       if (!project.meetings) project.meetings = [];
+      const notesParts = [description];
+      if (r.meetLink)  notesParts.push(`\nGoogle Meet: ${r.meetLink}`);
+      if (location && location !== r.meetLink) notesParts.push(`\nLocation: ${location}`);
+      if (r.eventLink) notesParts.push(`\nCalendar: ${r.eventLink}`);
+      if (recurrence && recurrence !== 'none') notesParts.push(`\nRecurrence: ${recurrence}${recurrenceEnd ? ' until ' + recurrenceEnd : ''}`);
       project.meetings.push({
         id: meetingIdCounter++,
         title,
         date,
         attendees: attendees.map(a => a.name || a.email).join(', '),
-        notes: description + (location ? `\n\nLocation: ${location}` : '') + (r.eventLink ? `\n\nCalendar link: ${r.eventLink}` : ''),
+        notes: notesParts.filter(Boolean).join(''),
       });
       renderMeetings();
     }
@@ -6559,12 +6670,18 @@ async function scheduleMeeting() {
     renderCalendarUpcoming();
 
     const parts = [];
-    if (r.eventLink) parts.push(`Calendar: ✓ (${attendees.length} invited)`);
+    if (r.eventLink) parts.push(`Calendar ✓ (${attendees.length} invited)`);
+    if (r.meetLink)  parts.push(`Meet link created`);
     if (r.notifications) {
       if (r.notifications.email) parts.push(`Email ✓`);
       if (r.notifications.slack) parts.push(`Slack ✓`);
     }
-    aiSetStatus('cal_result', `✓ Meeting scheduled. ${parts.join(' · ')}`, 'ok');
+    let html = `✓ Meeting scheduled. ${parts.join(' · ')}`;
+    if (r.meetLink) {
+      html += `<br><a href="${r.meetLink}" target="_blank" style="color:var(--purple);font-weight:600;">📹 Open Google Meet link</a>`;
+    }
+    const el = document.getElementById('cal_result');
+    if (el) { el.style.color = 'var(--green)'; el.innerHTML = html; }
 
     // Clear form for next entry
     document.getElementById('cal_title').value = '';
@@ -6573,6 +6690,117 @@ async function scheduleMeeting() {
   } catch (e) {
     aiSetStatus('cal_result', '✗ ' + e.message, 'error');
   }
+}
+
+// ── Import existing Google Calendar events into project meetings ───────
+let _calendarImportCache = []; // populated by loadCalendarEvents
+
+async function loadCalendarEvents() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const search    = document.getElementById('cal_import_search').value.trim();
+  const daysPast  = parseInt(document.getElementById('cal_import_past').value, 10)   || 14;
+  const daysFuture= parseInt(document.getElementById('cal_import_future').value, 10) || 60;
+  const status = document.getElementById('cal_import_status');
+  const resultsBox = document.getElementById('cal_import_results');
+  if (status) { status.style.color = 'var(--text-secondary)'; status.textContent = '⏳ Fetching events from your Google Calendar…'; }
+  resultsBox.style.display = 'none';
+
+  try {
+    const r = await aiCallApi('list-calendar-events', { search, daysPast, daysFuture });
+    _calendarImportCache = r.events || [];
+    renderCalendarImportList();
+    resultsBox.style.display = 'block';
+    if (status) { status.style.color = 'var(--green)'; status.textContent = `✓ Found ${_calendarImportCache.length} event${_calendarImportCache.length===1?'':'s'}.`; }
+    document.getElementById('cal_import_count').textContent = _calendarImportCache.length;
+  } catch (e) {
+    if (status) { status.style.color = 'var(--red)'; status.textContent = '✗ ' + e.message; }
+  }
+}
+
+function renderCalendarImportList() {
+  const list = document.getElementById('cal_import_list');
+  if (!list) return;
+  if (_calendarImportCache.length === 0) {
+    list.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-secondary);font-size:13px;">No events found in that date range.</div>';
+    return;
+  }
+  // Existing meeting titles for dedupe
+  const existingTitles = new Set((project.meetings || []).map(m => (m.title || '').trim().toLowerCase()));
+
+  list.innerHTML = _calendarImportCache.map((ev, i) => {
+    const alreadyImported = existingTitles.has(ev.title.trim().toLowerCase());
+    const dt = ev.startISO ? new Date(ev.startISO) : null;
+    const dateFmt = dt ? dt.toLocaleString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : 'No date';
+    const recurBadge = ev.isRecurring
+      ? `<span style="background:var(--purple-light);color:var(--purple);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">🔁 ${escHtml(ev.recurDesc)}</span>`
+      : '';
+    const meetBadge = ev.meetLink ? `<span style="background:#E8F5E9;color:#2E7D32;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">📹 Meet</span>` : '';
+    const alreadyBadge = alreadyImported ? `<span style="background:var(--gray-light);color:var(--text-secondary);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Already imported</span>` : '';
+    const attendeesPreview = ev.attendees.slice(0, 3).map(a => a.name || a.email.split('@')[0]).join(', ');
+    const attendeesText = ev.attendees.length > 3 ? `${attendeesPreview} +${ev.attendees.length - 3} more` : attendeesPreview;
+
+    return `<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;background:${alreadyImported ? 'var(--gray-light)' : 'transparent'};">
+      <input type="checkbox" class="cal-import-item" data-idx="${i}" ${alreadyImported ? '' : 'checked'} ${alreadyImported ? 'disabled' : ''} style="margin-top:4px;">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">
+          <strong style="font-size:13px;color:var(--gray-dark);">${escHtml(ev.title)}</strong>
+          ${recurBadge}${meetBadge}${alreadyBadge}
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">📅 ${escHtml(dateFmt)}</div>
+        ${attendeesText ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">👥 ${escHtml(attendeesText)}</div>` : ''}
+        ${ev.location ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">📍 ${escHtml(ev.location)}</div>` : ''}
+        ${ev.htmlLink ? `<a href="${ev.htmlLink}" target="_blank" style="font-size:11px;color:var(--purple);text-decoration:none;margin-top:3px;display:inline-block;">↗ Open in Google Calendar</a>` : ''}
+      </div>
+    </label>`;
+  }).join('');
+}
+
+function toggleSelectAllImports(select) {
+  document.querySelectorAll('.cal-import-item:not([disabled])').forEach(cb => { cb.checked = select; });
+}
+
+function importSelectedCalendarEvents() {
+  const checked = [...document.querySelectorAll('.cal-import-item:checked')];
+  if (checked.length === 0) { showToast('Nothing selected.', 'error'); return; }
+  if (!project.meetings) project.meetings = [];
+
+  let added = 0;
+  checked.forEach(cb => {
+    const ev = _calendarImportCache[parseInt(cb.dataset.idx, 10)];
+    if (!ev) return;
+    // Dedupe by title+startISO
+    const dupe = project.meetings.some(m =>
+      (m.title || '').trim().toLowerCase() === ev.title.trim().toLowerCase()
+      && (m.date || '') === (ev.startISO || '').slice(0, 10));
+    if (dupe) return;
+
+    const notesParts = [];
+    if (ev.description) notesParts.push(ev.description);
+    if (ev.isRecurring) notesParts.push(`\nRecurrence: ${ev.recurDesc}`);
+    if (ev.meetLink)    notesParts.push(`\nGoogle Meet: ${ev.meetLink}`);
+    if (ev.location && ev.location !== ev.meetLink) notesParts.push(`\nLocation: ${ev.location}`);
+    if (ev.htmlLink)    notesParts.push(`\nCalendar: ${ev.htmlLink}`);
+    if (ev.organizer)   notesParts.push(`\nOrganizer: ${ev.organizer}`);
+
+    project.meetings.push({
+      id: meetingIdCounter++,
+      title: ev.title,
+      date: (ev.startISO || '').slice(0, 10),
+      attendees: ev.attendees.map(a => a.name || a.email).join(', '),
+      notes: notesParts.join('').trim(),
+    });
+    added++;
+  });
+
+  renderMeetings();
+  renderCalendarUpcoming();
+  triggerAutoSave();
+
+  const msg = document.getElementById('cal_import_done_msg');
+  if (msg) msg.textContent = `✓ Imported ${added} meeting${added===1?'':'s'} into Meeting Notes.`;
+  showToast(`Imported ${added} meeting${added===1?'':'s'}.`);
+  // Re-render the import list so "Already imported" badges appear
+  renderCalendarImportList();
 }
 
 function loadMermaidExample() {
