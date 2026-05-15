@@ -7493,11 +7493,15 @@ function renderCalendarImportList() {
     list.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-secondary);font-size:13px;">No events found in that date range.</div>';
     return;
   }
-  // Existing meeting titles for dedupe
-  const existingTitles = new Set((project.meetings || []).map(m => (m.title || '').trim().toLowerCase()));
+  // Existing meeting keys for dedupe — match BOTH title AND date so multiple instances
+  // of a recurring meeting on different dates can all be imported independently.
+  const existingKeys = new Set((project.meetings || []).map(m =>
+    (m.title || '').trim().toLowerCase() + '|' + (m.date || '').slice(0, 10)
+  ));
 
   list.innerHTML = _calendarImportCache.map((ev, i) => {
-    const alreadyImported = existingTitles.has(ev.title.trim().toLowerCase());
+    const evKey = ev.title.trim().toLowerCase() + '|' + (ev.startISO || '').slice(0, 10);
+    const alreadyImported = existingKeys.has(evKey);
     const dt = ev.startISO ? new Date(ev.startISO) : null;
     const dateFmt = dt ? dt.toLocaleString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : 'No date';
     const recurBadge = ev.isRecurring
