@@ -6347,7 +6347,13 @@ function renderWorkstreams() {
     const aOpen     = d.ais.filter(a => a.status !== 'Done').length;
     const aCritical = d.ais.filter(a => a.status !== 'Done' && a.priority === 'Critical').length;
     const pct       = d.tasks.length ? Math.round((tDone/d.tasks.length)*100) : 0;
-    const members   = [...d.owners].sort();
+    // Filter "members" down to actual person names — strip team labels (Product, Sales, etc.)
+    // and the reserved buckets ("Other", "Unassigned"), since the dropdown stores team
+    // labels as the owner, which would otherwise pollute the people chip list.
+    const teamLabelSet = new Set([...STAKEHOLDER_LIST.map(s => s.label.toLowerCase()), 'other', 'unassigned']);
+    const members = [...d.owners]
+      .filter(n => n && !teamLabelSet.has(n.trim().toLowerCase()))
+      .sort();
 
     // Top 4 open AIs (priority order: Critical > High > Medium > Low)
     const priorityRank = { Critical:0, High:1, Medium:2, Low:3 };
@@ -6380,7 +6386,7 @@ function renderWorkstreams() {
         <div style="font-size:22px;flex-shrink:0;">${icon}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-weight:800;font-size:15px;color:var(--gray-dark);">${escHtml(team)}</div>
-          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">${members.length} owner${members.length!==1?'s':''} · ${d.tasks.length} task${d.tasks.length!==1?'s':''} · ${aOpen} open AI${aOpen!==1?'s':''}</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">${d.tasks.length} task${d.tasks.length!==1?'s':''} · ${aOpen} open AI${aOpen!==1?'s':''}</div>
         </div>
         ${aCritical ? `<span style="background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;">${aCritical} CRITICAL</span>` : ''}
         ${tPastDue ? `<span style="background:var(--red-light);color:var(--red);font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;">${tPastDue} PAST DUE</span>` : ''}
@@ -6404,14 +6410,8 @@ function renderWorkstreams() {
           <span>⚡ <strong style="color:${aOpen?'var(--orange)':'var(--text)'};">${aOpen}</strong> open AIs</span>
         </div>
 
-        <!-- Members -->
-        ${members.length ? `<div style="margin-bottom:14px;">
-          ${members.slice(0,10).map(n => `<span title="${escHtml(n)}" style="display:inline-flex;align-items:center;gap:6px;background:${color}15;color:${color};padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600;margin-right:5px;margin-bottom:4px;">
-            <span style="width:18px;height:18px;border-radius:50%;background:${color};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">${(n.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2))}</span>
-            ${escHtml(n)}
-          </span>`).join('')}
-          ${members.length>10 ? `<span style="font-size:11px;color:var(--text-secondary);">+${members.length-10} more</span>` : ''}
-        </div>` : ''}
+        <!-- Members chip list intentionally removed — team name in header is enough -->
+
 
         <!-- Two columns: top tasks · top AIs -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
