@@ -4843,8 +4843,15 @@ function addDecision() {
 }
 
 function deleteDecision(id) {
-  project.decisions = (project.decisions||[]).filter(d=>d.id!==id);
-  renderDecisions(); triggerAutoSave();
+  const d = (project.decisions || []).find(x => x.id === id);
+  if (!d) { showToast('Decision not found.', 'error'); return; }
+  if (!confirm(`Delete decision:\n"${d.decision || 'Untitled'}"?\n\nThis cannot be undone.`)) return;
+  pauseListenerForDelete();
+  project.decisions = (project.decisions || []).filter(x => x.id !== id);
+  tombstone(_tombstonedDecisionIds, id);
+  renderDecisions();
+  doAutoSave();
+  showToast('Decision deleted.');
 }
 
 function renderDecisions() {
@@ -4931,13 +4938,17 @@ function toggleAiDone(id) {
 }
 
 function deleteActionItem(id) {
-  pauseListenerForDelete(); // pause Firebase listener so it can't echo the old data back
+  const ai = (project.actionItems || []).find(x => x.id === id);
+  if (!ai) { showToast('Action item not found.', 'error'); return; }
+  if (!confirm(`Delete action item:\n"${ai.item || 'Untitled'}"?\n\nThis cannot be undone.`)) return;
+  pauseListenerForDelete();             // pause Firebase listener so it can't echo old data back
   project.actionItems = (project.actionItems || []).filter(x => x.id !== id);
-  tombstone(_tombstonedAiIds, id); // block Firebase from restoring this AI when listener resumes
+  tombstone(_tombstonedAiIds, id);      // block Firebase from restoring this AI when listener resumes
   renderActionItems();
   if (typeof renderMilestones === 'function') renderMilestones();
   if (typeof updateDashboard === 'function') updateDashboard();
-  doAutoSave(); // immediate save so Firebase confirms the delete before listener reconnects
+  doAutoSave();                         // immediate save so Firebase confirms the delete before listener reconnects
+  showToast('Action item deleted.');
 }
 
 function renderActionItems() {
@@ -5161,6 +5172,9 @@ function updateTaskField(id, field, value) {
 }
 
 function deleteTask(id) {
+  const t = (project.tasks || []).find(x => x.id === id);
+  if (!t) { showToast('Task not found.', 'error'); return; }
+  if (!confirm(`Delete task:\n"${t.task || 'Untitled'}"?\n\nThis cannot be undone.`)) return;
   pauseListenerForDelete(); // disconnect Firebase listener during delete to prevent echo
   project.tasks = project.tasks.filter(t => t.id !== id);
   project.risks = project.risks.filter(r => r.linkedTaskId !== id);
@@ -5170,6 +5184,7 @@ function deleteTask(id) {
   renderRisks();
   updateDashboard();
   if (fbConnected) setTimeout(() => { doAutoSave(); }, 2000);
+  showToast('Task deleted.');
 }
 
 function toggleTaskRisk(id) {
