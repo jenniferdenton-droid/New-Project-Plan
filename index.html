@@ -323,15 +323,15 @@
   <button class="tab-btn"        data-tab="launch"      onclick="switchTab('launch')">🚀 Launch Checklist</button>
   <button class="tab-btn"        data-tab="meetings"    onclick="switchTab('meetings')">📝 Meeting Notes</button>
   <button class="tab-btn"        data-tab="calendar"    onclick="switchTab('calendar')">📅 Calendar</button>
-  <button class="tab-btn"        data-tab="risks"       onclick="switchTab('risks')">⚠️ Risk Register</button>
+  <button class="tab-btn"        data-tab="aiassistant" onclick="switchTab('aiassistant')" style="color:var(--purple);font-weight:700;">🤖 AI Assistant</button>
+  <button class="tab-btn"        data-tab="links"       onclick="switchTab('links')">🔗 Links</button>
   <button class="tab-btn"        data-tab="decisions"   onclick="switchTab('decisions')">📋 Decisions</button>
+  <button class="tab-btn"        data-tab="digests"     onclick="switchTab('digests')">📧 Digests & Briefs</button>
+  <button class="tab-btn"        data-tab="risks"       onclick="switchTab('risks')">⚠️ Risk Register</button>
   <button class="tab-btn"        data-tab="budget"      onclick="switchTab('budget')">💰 Budget</button>
   <button class="tab-btn"        data-tab="processflow" onclick="switchTab('processflow')">🧩 Process Flow</button>
   <button class="tab-btn"        data-tab="handoff"     onclick="switchTab('handoff')">🤝 Handoff & SOPs</button>
-  <button class="tab-btn"        data-tab="digests"     onclick="switchTab('digests')">📧 Digests & Briefs</button>
-  <button class="tab-btn"        data-tab="links"       onclick="switchTab('links')">🔗 Links</button>
   <button class="tab-btn"        data-tab="proposal"    onclick="switchTab('proposal')">📄 Proposal Builder</button>
-  <button class="tab-btn"        data-tab="aiassistant" onclick="switchTab('aiassistant')" style="color:var(--purple);font-weight:700;">🤖 AI Assistant</button>
 </div>
 
 <!-- ===================== DASHBOARD ===================== -->
@@ -1808,52 +1808,93 @@
     <div style="padding:8px 24px 28px;font-size:13px;line-height:1.7;color:var(--text-primary);">
 
       <div style="background:var(--purple-light);border-radius:10px;padding:14px 16px;margin-bottom:20px;">
-        <strong style="color:var(--purple);">Quick start:</strong> <span style="color:var(--purple);">Click <strong>＋ New Project</strong> → fill in the wizard → you're ready to go. Everything auto-saves as you work.</span>
+        <strong style="color:var(--purple);">Quick start:</strong> <span style="color:var(--purple);">Click <strong>＋ New Project</strong> → fill in the wizard → you're ready to go. Everything auto-saves and syncs to your team in real time.</span>
       </div>
 
       <div style="margin-bottom:18px;">
         <div style="font-size:14px;font-weight:700;color:var(--purple);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">📂 Managing Projects</div>
         <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;">
-          <strong>＋ New Project</strong><span>Start a fresh project — opens a setup wizard for name, due date, lead, and stakeholders</span>
-          <strong>📂 My Projects</strong><span>See all your saved projects and switch between them</span>
-          <strong>⬇ Export</strong><span>Download a .json backup of your project (save a copy outside the browser)</span>
+          <strong>＋ New Project</strong><span>Start a fresh project — wizard captures name, due date, lead, and stakeholders. 4 default tasks auto-add: Demo env, Question flow, Post-launch handoff, Churn process.</span>
+          <strong>📂 My Projects</strong><span>See all saved projects and switch between them</span>
+          <strong>⬇ Export</strong><span>Download a .json backup (save outside the browser as a safety net)</span>
           <strong>⬆ Load</strong><span>Restore a project from a previously exported .json file</span>
-          <strong>✕ Clear</strong><span>Remove the current project from this browser (does not delete Firebase data)</span>
+          <strong>📧 Send to Team</strong><span>Email project status to all included stakeholders (uses POC emails from Stakeholder Plan)</span>
         </div>
       </div>
 
       <div style="margin-bottom:18px;">
         <div style="font-size:14px;font-weight:700;color:var(--purple);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">🗂 The Tabs</div>
         <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;">
-          <strong>📊 Dashboard</strong><span>Live summary — task counts, stakeholder status, flagged risks, upcoming due dates</span>
-          <strong>⚙️ Project Setup</strong><span>Edit project details, due date, lead, and which teams are included or have had the plan shared</span>
-          <strong>📄 Proposal Builder</strong><span>Fill out the form to generate a formatted project proposal — copy to Google Docs with one click</span>
-          <strong>✅ Tasks & Deliverables</strong><span>Add and manage all tasks — set owner, due date, and status. Load template packs or import from a doc</span>
+          <strong>📊 Dashboard</strong><span>Live summary — RAG status, task counts, flagged risks, upcoming due dates, project owners by team</span>
+          <strong>⚙️ Project Setup</strong><span>Project details, due date, lead, and the Stakeholder Plan (14 teams) with Included / Plan Shared checkboxes + POC names + emails</span>
+          <strong>🗂 Plan</strong><span>All tasks + action items grouped by phase. Inline edit due date, owner (autocompletes from stakeholder teams), priority, status. Click owner field → suggestions include teams first. Notes column captures "move reason" when relocating items.</span>
+          <strong>🧭 Workstreams</strong><span>Tasks + AIs grouped by TEAM (Sales, PSM, Onboarding, etc.) — auto-inferred from owners. Each team card shows progress, members, top open work.</span>
           <strong>🚀 Launch Checklist</strong><span>Pre-built go-live checklist — check off each item, view examples, add notes, copy templates</span>
-          <strong>📝 Meeting Notes</strong><span>Log meetings — paste a transcript and get auto-drafted notes and action items</span>
-          <strong>⚠️ Risk Register</strong><span>Flag risks from tasks or add manually — tracks owner, severity, and mitigation plan</span>
-          <strong>📋 Digests & Briefs</strong><span>Generate a weekly digest, daily standup, or pre-meeting brief to share with stakeholders</span>
+          <strong>📝 Meeting Notes</strong><span>Log meetings — click a meeting card to edit notes, paste Fathom transcript, let AI extract action items / decisions / risks</span>
+          <strong>📅 Calendar</strong><span>Schedule meetings with Google Calendar — auto-generates Google Meet link, supports recurring (daily/weekly/biweekly/monthly), invites POCs (checkboxes), can add ad-hoc emails. Also: import existing Calendar events into the project.</span>
+          <strong>🤖 AI Assistant</strong><span>Process transcripts, draft status updates, send Slack/email, polish messages with Claude. Settings panel (per project): Slack channel, email recipients, CC list.</span>
+          <strong>🔗 Links</strong><span>Quick reference for important URLs — paste a link and it auto-pulls the page title. Group by category.</span>
+          <strong>📋 Decisions</strong><span>Log key decisions with context, owner, and date. Auto-populates when AI processes a transcript.</span>
+          <strong>📧 Digests & Briefs</strong><span>Generate weekly digest, daily standup, or pre-meeting brief from current project state</span>
+          <strong>⚠️ Risk Register</strong><span>Flag risks manually or from tasks. Tracks owner, likelihood, impact, mitigation plan.</span>
+          <strong>💰 Budget</strong><span>Track budget total, contingency, and line items by category</span>
+          <strong>🧩 Process Flow</strong><span>Link to Lucidchart/Miro/Figma diagrams + inline Mermaid diagram editor for quick process flows</span>
+          <strong>🤝 Handoff & SOPs</strong><span>New owner info, handoff checklist (with PM + new-owner signoffs), SOP list with statuses (Draft → Reviewed → Signed Off). Built-in SOP template.</span>
+          <strong>📄 Proposal Builder</strong><span>Build a formatted proposal from form fields, or link to an existing Google Doc proposal</span>
         </div>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div style="font-size:14px;font-weight:700;color:var(--purple);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">🤖 AI Assistant Capabilities</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;">
+          <strong>📝 Process Transcript</strong><span>Paste any Fathom/Otter/Avoma transcript → Claude extracts action items, decisions, risks, summary. Auto-adds to project.</span>
+          <strong>📊 Send Status Update</strong><span>Pick audience (Team / Leadership / Stakeholders) and cadence (Daily / Weekly / Ad-hoc). Claude drafts and sends via Slack + email.</span>
+          <strong>💬 Quick Slack</strong><span>Send a one-off Slack message to the channel set in Settings. Optional Claude polish before sending.</span>
+          <strong>📧 Quick Email</strong><span>Send a one-off email. Subject auto-prefixes with [Project Name]. POCs auto-included.</span>
+          <strong>⚙️ Settings</strong><span>Slack channel, email recipients, CC list, from name. Saved per project, synced to teammates.</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div style="font-size:14px;font-weight:700;color:var(--purple);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">📅 Calendar & Meetings</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;">
+          <strong>Schedule Meeting</strong><span>Creates a Google Calendar event with attendees, recurrence, and a Google Meet link auto-generated</span>
+          <strong>Recurring</strong><span>Daily / Weekly / Every 2 weeks / Monthly / Weekdays only — with optional end date</span>
+          <strong>Stakeholder Attendees</strong><span>POCs auto-populate as checkboxes. Uncheck anyone you don't want. Add ad-hoc emails too.</span>
+          <strong>Import from Calendar</strong><span>Pull existing Google Calendar events (including recurring) into your project's Meeting Notes</span>
+          <strong>Click a Meeting Card</strong><span>Opens edit modal — add notes, Fathom link, transcript. AI extracts to project.</span>
+          <strong>📹 Google Meet</strong><span>Clickable green button on every meeting card with a Meet link</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div style="font-size:14px;font-weight:700;color:var(--purple);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">🤝 Handoff & SOPs</div>
+        <ul style="margin:0;padding-left:18px;">
+          <li>Capture the <strong>new owner</strong> taking over post-launch — name, role, email, effective date</li>
+          <li>Track 5-step handoff checklist with auto-captured signoff dates from PM and new owner</li>
+          <li>Build <strong>SOPs</strong> with status (Draft → Reviewed → Signed Off), owner, external link, content</li>
+          <li>Use <strong>📋 Insert SOP Template</strong> for a pre-structured template (Purpose / Scope / Procedure / Exceptions / Quality Checks)</li>
+        </ul>
       </div>
 
       <div style="margin-bottom:18px;">
         <div style="font-size:14px;font-weight:700;color:var(--purple);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">🔄 Saving & Syncing</div>
         <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;">
-          <strong>✓ Saved badge</strong><span>Your project auto-saves to your browser every 2 seconds after any change — no manual save needed</span>
-          <strong>☁️ Live Sync</strong><span>Connect Firebase to sync your project in real time with anyone who has your share link</span>
-          <strong>🔗 Share Link</strong><span>Once Firebase is connected, copy your project's unique link — anyone who opens it sees the same live project</span>
-          <strong>● Live badge</strong><span>Green dot means Firebase is active and syncing changes across all users in real time</span>
+          <strong>✓ Saved badge</strong><span>Auto-saves every 2 seconds to your browser AND to Firebase (cloud)</span>
+          <strong>☁️ Live Sync</strong><span>Firebase is pre-configured — any change syncs to teammates within ~2 seconds</span>
+          <strong>🔗 Share Link</strong><span>Copy your project's URL (with #proj_xxx) — anyone who opens it sees the same live project</span>
+          <strong>● Live badge</strong><span>Green dot in header = Firebase active and syncing changes across users in real time</span>
         </div>
       </div>
 
       <div style="margin-bottom:18px;">
         <div style="font-size:14px;font-weight:700;color:var(--purple);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">👥 Working as a Team</div>
         <ul style="margin:0;padding-left:18px;">
-          <li>Each PM goes to <strong>newprojectplanops.netlify.app</strong> and clicks <strong>＋ New Project</strong> to create their own project</li>
-          <li>Each project gets its own unique ID — no two PMs share data unless they intentionally share a link</li>
-          <li>To invite someone to view or edit your project: click <strong>🔗 Share Link</strong> → send them that URL</li>
-          <li>Anyone with the link opens it in their browser and sees your live project instantly — no login needed</li>
-          <li>Use <strong>📧 Send to Team</strong> to email a status update to all stakeholders listed in your project</li>
+          <li>Each PM creates their own project — gets a unique <strong>#proj_xxx</strong> URL</li>
+          <li>Share a project by sending its full URL (with the hash) to a teammate</li>
+          <li>No login needed — anyone with the link opens it and sees the live project instantly</li>
+          <li>Edits from any teammate sync to all others within ~2 seconds via Firebase</li>
+          <li>Use <strong>📧 Send to Team</strong> or AI Assistant Send Status to email all stakeholder POCs</li>
         </ul>
       </div>
 
@@ -1867,11 +1908,21 @@
           <span style="background:#f8d7da;color:#721c24;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;">Blocked</span>
           <span style="background:#e2e3e5;color:#383d41;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;">On Hold</span>
         </div>
-        <div style="margin-top:8px;font-size:12px;color:var(--text-secondary);">Marking a task <strong>At Risk</strong> or <strong>Blocked</strong> automatically copies it to the Risk Register tab.</div>
+        <div style="margin-top:8px;font-size:12px;color:var(--text-secondary);">Marking a task <strong>At Risk</strong> or <strong>Blocked</strong> auto-copies it to the Risk Register tab.</div>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div style="font-size:14px;font-weight:700;color:var(--purple);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">📌 Default Tasks (Auto-Added to Every Project)</div>
+        <ul style="margin:0;padding-left:18px;font-size:12px;">
+          <li><strong>Demo environment created</strong> (Product) — Confirm a working demo is provisioned</li>
+          <li><strong>Define flow for where future questions go</strong> (Ops) — Routing process for new questions</li>
+          <li><strong>Document post-launch question flow & service handoff</strong> (Ops/Product) — Service handoff path</li>
+          <li><strong>Define churn / cancellation & off-boarding process</strong> (Ops/Billing) — When customers leave: billing stop, data archival, refunds</li>
+        </ul>
       </div>
 
       <div style="background:var(--gray-light);border-radius:10px;padding:12px 16px;font-size:12px;color:var(--text-secondary);">
-        💡 <strong>Tip:</strong> Bookmark your project's <strong>#proj_xxx</strong> URL so you can always come back to it directly — even if Firebase reconnects, your project loads instantly.
+        💡 <strong>Tip:</strong> Bookmark your project's <strong>#proj_xxx</strong> URL so you can come back to it directly. Editing a task on the Plan tab moves it between phases via the Phase dropdown — you'll be prompted for a "Move Reason" which is logged to the task notes.
       </div>
 
     </div>
@@ -2159,6 +2210,7 @@ const STAKEHOLDER_LIST = [
   { key: 'RevOps', label: 'Rev Ops' },
   { key: 'BizOps', label: 'Biz Ops' },
   { key: 'External', label: 'External' },
+  { key: 'SeniorLeadership', label: 'Senior Leadership Owner' },
 ];
 
 const STATUSES = ['Not Started', 'In Progress', 'At Risk', 'Done', 'Blocked', 'On Hold'];
@@ -5608,11 +5660,12 @@ const TEAM_META = {
   Marketing:     { icon:'📣', color:'#AD1457' },
   InternalComms: { icon:'📢', color:'#6A1B9A' },
   Product:       { icon:'🛠️', color:'#1565C0' },
-  RevOps:        { icon:'📊', color:'#6B4EFF' },
-  BizOps:        { icon:'⚙️', color:'#0097A7' },
-  External:      { icon:'🔌', color:'#2E7D32' },
-  Other:         { icon:'⬛', color:'#455A64' },
-  Unassigned:    { icon:'⚪', color:'#607D8B' },
+  RevOps:           { icon:'📊', color:'#6B4EFF' },
+  BizOps:           { icon:'⚙️', color:'#0097A7' },
+  External:         { icon:'🔌', color:'#2E7D32' },
+  SeniorLeadership: { icon:'👑', color:'#37474F' },
+  Other:            { icon:'⬛', color:'#455A64' },
+  Unassigned:       { icon:'⚪', color:'#607D8B' },
 };
 function teamIcon(label)  { const k = teamKeyByLabel(label); return (TEAM_META[k] || TEAM_META.Other).icon; }
 function teamColor(label) { const k = teamKeyByLabel(label); return (TEAM_META[k] || TEAM_META.Other).color; }
