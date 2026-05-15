@@ -4379,6 +4379,51 @@ function editAiCell(id, field, cell) {
   inp.addEventListener('keydown', e=>{ if(e.key==='Enter') save(); if(e.key==='Escape') renderMilestones(); });
 }
 
+// ── Owner picker: set task/AI owner to a stakeholder team, with multi-team support ──
+function promptMultiTeam(currentVal) {
+  const teams = STAKEHOLDER_LIST.map(s => s.label);
+  const current = (currentVal || '').split(/[/&,;]| and /i).map(t => t.trim()).filter(Boolean);
+  const list = teams.map((t, i) => `${i+1}. ${current.includes(t) ? '✅ ' : '⬜ '} ${t}`).join('\n');
+  const input = prompt(
+    `Pick teams (enter numbers separated by commas — e.g., "1,3,7"):\n\n${list}\n\nLeave blank to keep current value.`,
+    current.length ? current.map(t => teams.indexOf(t) + 1).filter(i => i > 0).join(',') : ''
+  );
+  if (input === null || !input.trim()) return null;
+  const picked = input.split(',').map(n => parseInt(n.trim(), 10) - 1).filter(i => i >= 0 && i < teams.length).map(i => teams[i]);
+  if (picked.length === 0) return null;
+  return picked.join(' / ');
+}
+
+function setTaskOwner(taskId, value) {
+  const t = (project.tasks || []).find(x => x.id === taskId);
+  if (!t) return;
+  if (value === '__multi__') {
+    const newVal = promptMultiTeam(t.owner);
+    if (newVal === null) { renderMilestones(); return; } // user cancelled
+    t.owner = newVal;
+  } else {
+    t.owner = value;
+  }
+  renderMilestones();
+  if (typeof renderTasks === 'function') renderTasks();
+  triggerAutoSave();
+}
+
+function setAiOwner(aiId, value) {
+  const a = (project.actionItems || []).find(x => x.id === aiId);
+  if (!a) return;
+  if (value === '__multi__') {
+    const newVal = promptMultiTeam(a.owner);
+    if (newVal === null) { renderMilestones(); return; }
+    a.owner = newVal;
+  } else {
+    a.owner = value;
+  }
+  renderMilestones();
+  if (typeof renderActionItems === 'function') renderActionItems();
+  triggerAutoSave();
+}
+
 // ── Move task / action item between phases (called from Plan view dropdowns) ──
 function setTaskMilestone(taskId, newMilestoneId) {
   const t = (project.tasks || []).find(x => x.id === taskId);
@@ -4484,6 +4529,32 @@ function renderMilestones() {
     return opts.join('');
   }
 
+  // ── Helper: build owner (stakeholder team) options ─
+  function ownerTeamOptions(currentOwner) {
+    const cur = (currentOwner || '').trim();
+    const opts = [`<option value="" ${!cur?'selected':''}>— Pick a team —</option>`];
+    // Stakeholder teams (with contact in parens if set)
+    STAKEHOLDER_LIST.forEach(s => {
+      const d = (project.stakeholders || {})[s.key] || {};
+      const label = d.included && d.contactName?.trim()
+        ? `${s.label} (${d.contactName.trim()})`
+        : s.label;
+      const matches = cur === s.label || cur === label || (cur && cur.includes(s.label));
+      opts.push(`<option value="${escHtml(s.label)}" ${matches?'selected':''}>${escHtml(label)}</option>`);
+    });
+    // If current value doesn't match any team, preserve it as a "Custom" option
+    const teamLabels = STAKEHOLDER_LIST.map(s => s.label);
+    const inferredTeam = cur ? inferTeams(cur) : [];
+    if (cur && !teamLabels.includes(cur) && inferredTeam[0] !== 'Other' && inferredTeam[0] !== 'Unassigned') {
+      // It already matched a team via inferTeams — show as auto-mapped
+      opts.push(`<option value="${escHtml(cur)}" selected>↪ ${escHtml(cur)} (→ ${escHtml(inferredTeam[0])})</option>`);
+    } else if (cur && !teamLabels.includes(cur)) {
+      opts.push(`<option value="${escHtml(cur)}" selected>⚠ ${escHtml(cur)} (custom — pick a team)</option>`);
+    }
+    opts.push(`<option value="__multi__">＋ Multiple teams…</option>`);
+    return opts.join('');
+  }
+
   // ── Helper: render tasks for a milestone (or null = unassigned) ─
   function taskRows(milestoneId) {
     const mTasks = tasks.filter(t => (t.milestoneId ?? null) === milestoneId);
@@ -4499,9 +4570,10 @@ function renderMilestones() {
           ${isPastDue?'<span class="past-due-badge">PAST DUE</span>':''}
         </td>
         <td style="padding:6px 8px;">
-          <input list="ownerDatalist" value="${escHtml(t.owner)}" placeholder="Owner"
-            onchange="updateTaskField(${t.id},'owner',this.value.trim())"
-            style="border:none;background:transparent;font-size:12px;width:100px;padding:0;outline:none;">
+          <select class="inline-select" style="font-size:12px;max-width:140px;" title="Owner — pick a team from the Stakeholder Plan"
+            onchange="setTaskOwner(${t.id}, this.value)">
+            ${ownerTeamOptions(t.owner)}
+          </select>
         </td>
         <td style="padding:6px 8px;">
           <input type="date" value="${t.dueDate}" onchange="updateTaskField(${t.id},'dueDate',this.value)"
@@ -4551,9 +4623,10 @@ function renderMilestones() {
           ${escHtml(a.item)||'<span style="color:var(--text-secondary);font-style:italic;">Click to add…</span>'}
         </td>
         <td style="padding:6px 8px;">
-          <input list="ownerDatalist" value="${escHtml(a.owner)}" placeholder="Owner"
-            onchange="updateAiField(${a.id},'owner',this.value.trim())"
-            style="border:none;background:transparent;font-size:12px;width:90px;padding:0;outline:none;">
+          <select class="inline-select" style="font-size:12px;max-width:130px;" title="Owner — pick a team from the Stakeholder Plan"
+            onchange="setAiOwner(${a.id}, this.value)">
+            ${ownerTeamOptions(a.owner)}
+          </select>
         </td>
         <td style="padding:6px 8px;">
           <input type="date" value="${a.dueDate||''}" onchange="updateAiField(${a.id},'dueDate',this.value);renderMilestones();"
@@ -6769,10 +6842,11 @@ async function pinProjectToSlack() {
   try {
     const r = await aiCallApi('pin-project-to-slack', {});
     const bits = [];
-    if (r.posted)       bits.push('✓ Posted');
-    if (r.pinned)       bits.push('✓ Pinned');
-    if (r.topicSet)     bits.push('✓ Topic set');
-    if (r.bookmarkAdded)bits.push('✓ Bookmark added');
+    if (r.posted)             bits.push('✓ Posted');
+    if (r.pinned)             bits.push('✓ Pinned');
+    if (r.topicSet)           bits.push('✓ Topic set');
+    if (r.bookmarksAdded > 0) bits.push(`✓ ${r.bookmarksAdded} bookmark${r.bookmarksAdded>1?'s':''} added to channel top`);
+    if (r.bookmarksSkipped > 0) bits.push(`(${r.bookmarksSkipped} already there)`);
     let msg = bits.join(' · ');
     if (r.warnings && r.warnings.length) {
       msg += '<br><span style="color:var(--orange);font-size:11px;">⚠ ' + r.warnings.map(escHtml).join(' · ') + '</span>';
