@@ -1275,13 +1275,14 @@
       <div style="margin-bottom:14px;">
         <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Email Recipients (comma-separated)</label>
         <textarea id="ai_set_recipients" rows="2" placeholder="leslie@joinmoxie.com, sol@layer.com, ben@layer.com, ceejay@joinmoxie.com" oninput="aiSettingsChange()" style="font-size:12px;"></textarea>
+        <div id="ai_poc_autoinclude" style="font-size:11px;color:var(--teal);margin-top:4px;font-weight:600;"></div>
       </div>
       <div style="margin-bottom:14px;">
         <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">CC List (optional)</label>
         <input type="text" id="ai_set_cc" placeholder="cfo@joinmoxie.com" oninput="aiSettingsChange()" style="font-size:12px;">
       </div>
       <div style="background:#FFFDE7;border:1px solid #F9A825;border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--gray-dark);">
-        <strong>⚙️ One-time setup:</strong> Add API keys in your Vercel project settings (Environment Variables): <code>ANTHROPIC_API_KEY</code>, <code>SLACK_WEBHOOK_URL</code>, <code>SENDGRID_API_KEY</code>, <code>SENDGRID_FROM_EMAIL</code>, <code>GOOGLE_SERVICE_ACCOUNT_JSON</code>, <code>GDRIVE_FOLDER_ID</code>. See README in the repo.
+        <strong>⚙️ One-time setup:</strong> Add these in Vercel → Settings → Environment Variables: <code>ANTHROPIC_API_KEY</code>, <code>SLACK_BOT_TOKEN</code>, <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>, <code>GOOGLE_REFRESH_TOKEN</code>, <code>GMAIL_FROM_EMAIL</code>. See deploy-bundle README.
       </div>
     </div>
   </div>
@@ -3911,7 +3912,24 @@ function editAiCell(id, field, cell) {
 function setTaskMilestone(taskId, newMilestoneId) {
   const t = (project.tasks || []).find(x => x.id === taskId);
   if (!t) return;
-  t.milestoneId = (newMilestoneId === null || newMilestoneId === '') ? null : Number(newMilestoneId);
+  const oldMid = t.milestoneId;
+  const newMid = (newMilestoneId === null || newMilestoneId === '') ? null : Number(newMilestoneId);
+  // If actually moving (not a redundant set), prompt for a reason and log it
+  if (oldMid !== newMid) {
+    const oldMs = (project.milestones || []).find(m => m.id === oldMid);
+    const newMs = (project.milestones || []).find(m => m.id === newMid);
+    const reason = prompt(
+      `Moving "${t.task || 'Untitled task'}"\n  from: ${oldMs ? oldMs.name : 'Unassigned'}\n  to:   ${newMs ? newMs.name : 'Unassigned'}\n\nWhy is this being moved? (Optional — leave blank to skip)`,
+      ''
+    );
+    // User cancelled the prompt entirely — revert and bail
+    if (reason === null) { renderMilestones(); return; }
+    if (reason.trim()) {
+      const entry = `[${new Date().toISOString().slice(0,10)}] Moved to ${newMs ? newMs.name : 'Unassigned'}: ${reason.trim()}`;
+      t.notes = (t.notes ? t.notes + '\n' : '') + entry;
+    }
+  }
+  t.milestoneId = newMid;
   renderMilestones();
   if (typeof renderTasks === 'function') renderTasks();
   triggerAutoSave();
@@ -4026,6 +4044,9 @@ function renderMilestones() {
             ${msOptions(t.milestoneId)}
           </select>
         </td>
+        <td class="editable" onclick="editTaskField(${t.id},'notes',this)" title="Click to edit notes — log reason for changes, blockers, decisions" style="padding:6px 8px;font-size:12px;color:${t.notes ? 'var(--text)' : 'var(--text-secondary)'};max-width:200px;">
+          ${t.notes ? (t.notes.length > 80 ? escHtml(t.notes.slice(0, 80)) + '…' : escHtml(t.notes)) : '<span style="font-style:italic;">+ Add note</span>'}
+        </td>
         <td style="padding:6px 8px;text-align:center;">
           <button class="flag-btn ${t.flaggedRisk?'flagged':''}" onclick="toggleTaskRisk(${t.id})" style="font-size:11px;padding:2px 6px;" title="${t.flaggedRisk?'Remove risk flag':'Flag as risk'}">
             ${t.flaggedRisk?'🚩':'🏳'}
@@ -4110,6 +4131,7 @@ function renderMilestones() {
               <th style="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-secondary);width:100px;">Due</th>
               <th style="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-secondary);width:120px;">Status</th>
               <th style="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-secondary);width:160px;">Phase</th>
+              <th style="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-secondary);width:200px;">Notes / Move Reason</th>
               <th style="padding:5px 8px;width:50px;font-size:10px;text-transform:uppercase;color:var(--text-secondary);">Risk</th>
               <th style="width:32px;"></th>
             </tr></thead>
@@ -6040,6 +6062,24 @@ function aiLoadSettings() {
   set('ai_set_fromname',     s.fromName);
   set('ai_set_recipients',   (s.recipients || []).join(', '));
   set('ai_set_cc',           (s.cc || []).join(', '));
+  aiUpdatePocBadge();
+}
+function aiUpdatePocBadge() {
+  const el = document.getElementById('ai_poc_autoinclude');
+  if (!el) return;
+  const stakeholders = (project && project.stakeholders) || {};
+  const pocs = [];
+  Object.keys(stakeholders).forEach(k => {
+    const s = stakeholders[k];
+    if (s && s.included && s.contactEmail && s.contactEmail.trim()) {
+      pocs.push({ team: k, email: s.contactEmail.trim() });
+    }
+  });
+  if (pocs.length === 0) {
+    el.textContent = '';
+    return;
+  }
+  el.innerHTML = `✓ Auto-includes <strong>${pocs.length}</strong> POC email${pocs.length>1?'s':''} from your Stakeholder Plan (${pocs.map(p=>p.email).join(', ')})`;
 }
 function aiSettingsChange() {
   if (!project.aiSettings) project.aiSettings = {};
