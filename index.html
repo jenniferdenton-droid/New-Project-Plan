@@ -3272,6 +3272,13 @@ function buildStakeholderGrid(containerId) {
   const isWizard = containerId.includes('wizard');
   const prefix = isWizard ? 'wsh_' : 'sh_';
   const grid = document.getElementById(containerId);
+  if (!grid) return;
+  // SAFETY: if the user is currently typing inside one of these inputs (Firebase
+  // listener triggered a sync mid-type), don't blow away the input value.
+  const active = document.activeElement;
+  if (active && grid.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+    return; // skip rebuild — let the user finish typing
+  }
   grid.innerHTML = STAKEHOLDER_LIST.map(s => {
     const data = project.stakeholders[s.key] || { included: false, shared: false, contactName: '', contactEmail: '' };
     return `<div class="stakeholder-item ${data.included ? 'included' : ''} ${data.shared ? 'shared' : ''}" id="${prefix}card_${s.key}">
@@ -3288,9 +3295,13 @@ function buildStakeholderGrid(containerId) {
       </div>
       <div class="stakeholder-contact">
         <input type="text" id="${prefix}name_${s.key}" value="${data.contactName || ''}"
-          placeholder="Contact name" title="Person representing this team">
+          placeholder="Contact name" title="Person representing this team — type and click out (or Tab) to save"
+          onchange="updateStakeholder('${prefix}','${s.key}')"
+          onblur="updateStakeholder('${prefix}','${s.key}')">
         <input type="email" id="${prefix}email_${s.key}" value="${data.contactEmail || ''}"
-          placeholder="Email address" title="Email for sending plan updates">
+          placeholder="Email address" title="Email for plan updates — type and click out (or Tab) to save"
+          onchange="updateStakeholder('${prefix}','${s.key}')"
+          onblur="updateStakeholder('${prefix}','${s.key}')">
       </div>
     </div>`;
   }).join('');
@@ -4901,6 +4912,12 @@ function addActionItem() {
 function updateAiField(id, field, value) {
   const ai=(project.actionItems||[]).find(x=>x.id===id);
   if(ai) ai[field]=value;
+  // Re-render so past-due badges + priority color updates
+  if (field === 'dueDate' || field === 'priority' || field === 'status') {
+    if (typeof renderMilestones === 'function') renderMilestones();
+    if (typeof renderActionItems === 'function') renderActionItems();
+    if (typeof updateDashboard === 'function') updateDashboard();
+  }
   triggerAutoSave();
 }
 
@@ -5128,7 +5145,14 @@ function updateTaskField(id, field, value) {
   const task = project.tasks.find(t => t.id === id);
   if (task) { task[field] = value; }
   if (field === 'status' && value === 'At Risk') { if (!task.flaggedRisk) {} }
+  // Re-render the Plan view so past-due / "Xd overdue" badges recompute
+  // when dueDate or status changes. Skip for owner/notes to keep cursor in place.
+  if (field === 'dueDate' || field === 'status' || field === 'flaggedRisk') {
+    if (typeof renderMilestones === 'function') renderMilestones();
+    if (typeof renderTasks === 'function')      renderTasks();
+  }
   updateDashboard();
+  triggerAutoSave();
 }
 
 function deleteTask(id) {
