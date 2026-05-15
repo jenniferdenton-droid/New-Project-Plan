@@ -144,13 +144,13 @@ Slides MUST be relevant to the meeting focus. Be concise — slides have limited
     result.notifications.slack = true;
   }
   if (distribution.email) {
-    const recipients = (settings.recipients || []).filter(Boolean);
-    if (recipients.length === 0) throw new Error('Email checked but no recipients configured (Settings panel).');
+    const recipients = collectRecipients(settings, project);
+    if (recipients.length === 0) throw new Error('No recipients configured (Settings recipients OR Stakeholder POC emails).');
     const summary = await summarizeForEmail(project, deckSpec);
     await sendEmail({
       to: recipients,
       cc: settings.cc || [],
-      subject: `[${project.name}] ${deckSpec.deckTitle || title || 'Working Session Deck'}`,
+      subject: deckSpec.deckTitle || title || 'Working Session Deck',
       html: emailHtml({ project, deckSpec, summary, link: result.driveLink, fromName: settings.fromName }),
       attachments: result.driveLink ? [] : [{
         content: pptxBuffer.toString('base64'),
@@ -159,6 +159,7 @@ Slides MUST be relevant to the meeting focus. Be concise — slides have limited
         disposition: 'attachment',
       }],
       fromName: settings.fromName,
+      projectName: project.name,
     });
     result.notifications.email = recipients.length;
   }
@@ -225,17 +226,32 @@ Return JSON: { "subject": "...", "slackMrkdwn": "...", "emailHtml": "..." }
     result.notifications.slack = true;
   }
   if (channels.email) {
-    const recipients = (settings.recipients || []).filter(Boolean);
-    if (recipients.length === 0) throw new Error('Email checked but no recipients configured.');
+    const recipients = collectRecipients(settings, project);
+    if (recipients.length === 0) throw new Error('No recipients configured in Settings AND no POC emails on Stakeholder Plan.');
     await sendEmail({
       to: recipients, cc: settings.cc || [],
-      subject: copy.subject || `${project.name} — ${cadence} update`,
+      subject: copy.subject || `${cadence} update`,
       html: copy.emailHtml || `<pre>${copy.slackMrkdwn}</pre>`,
       fromName: settings.fromName,
+      projectName: project.name,
     });
     result.notifications.email = recipients.length;
   }
   return result;
+}
+
+// Returns merged unique list of: Settings.recipients + POC emails from stakeholders.included
+function collectRecipients(settings, project) {
+  const list = new Set();
+  (settings.recipients || []).forEach(r => { if (r && r.trim()) list.add(r.trim().toLowerCase()); });
+  if (project && project.stakeholders) {
+    Object.values(project.stakeholders).forEach(s => {
+      if (s && s.included && s.contactEmail && s.contactEmail.trim()) {
+        list.add(s.contactEmail.trim().toLowerCase());
+      }
+    });
+  }
+  return [...list];
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -252,12 +268,13 @@ async function quickSend({ channel, subject, body, polish, project, settings }) 
   if (channel === 'slack') {
     await postToSlack({ text: finalText, settings });
   } else {
-    const recipients = (settings.recipients || []).filter(Boolean);
-    if (recipients.length === 0) throw new Error('No recipients configured.');
+    const recipients = collectRecipients(settings, project);
+    if (recipients.length === 0) throw new Error('No recipients configured (Settings recipients OR Stakeholder POC emails).');
     await sendEmail({
       to: recipients, cc: settings.cc || [],
       subject, html: finalText.includes('<') ? finalText : `<p>${finalText.replace(/\n/g, '<br>')}</p>`,
       fromName: settings.fromName,
+      projectName: project.name,
     });
   }
   return { ok: true, finalText };
@@ -305,9 +322,14 @@ async function postToSlack({ text, settings }) {
   throw new Error('No Slack credentials — set either SLACK_BOT_TOKEN (+ SLACK_CHANNEL) or SLACK_WEBHOOK_URL in Vercel env vars.');
 }
 
-async function sendEmail({ to, cc, subject, html, attachments, fromName }) {
+async function sendEmail({ to, cc, subject, html, attachments, fromName, projectName }) {
   const fromEmail = process.env.GMAIL_FROM_EMAIL;
   if (!fromEmail) throw new Error('GMAIL_FROM_EMAIL not set.');
+
+  // Auto-prefix subject with [Project Name] if not already present
+  if (projectName && subject && !subject.includes(`[${projectName}]`) && !subject.toLowerCase().includes(projectName.toLowerCase())) {
+    subject = `[${projectName}] ${subject}`;
+  }
   const gmail = getGmailClient();
   const fromHeader = fromName ? `"${fromName.replace(/"/g, '')}" <${fromEmail}>` : fromEmail;
   const toList = Array.isArray(to) ? to.join(', ') : to;
