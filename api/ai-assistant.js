@@ -495,7 +495,11 @@ async function listCalendarEvents({ daysPast, daysFuture, search, project }) {
 
   items.sort((a, b) => (a.startISO || '').localeCompare(b.startISO || ''));
 
-  return { events: items };
+  return {
+    events: items,
+    serverNow: new Date().toISOString(),       // for debugging: confirms fresh code
+    futureLogicVersion: 'v2-pick-next-upcoming',// bumped when the dedupe logic changes
+  };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1038,6 +1042,9 @@ module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // Never cache API responses — guarantees fresh data on every click
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST')    return res.status(405).json({ error: 'POST only' });
 
