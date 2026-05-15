@@ -1,0 +1,13 @@
+{
+  "name": "moxie-ops-project-plans",
+  "version": "1.0.0",
+  "description": "Bookkeeping launch tracker + AI Assistant (Hobby-tier: no deck gen)",
+  "private": true,
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "googleapis": "^144.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
