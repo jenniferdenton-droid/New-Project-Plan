@@ -1704,6 +1704,11 @@
         <button class="btn btn-primary" onclick="loadCalendarEvents()">🔄 Fetch Events</button>
       </div>
 
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);margin-bottom:10px;cursor:pointer;">
+        <input type="checkbox" id="cal_import_expand" onchange="if(_calendarImportCache.length) loadCalendarEvents();">
+        <span>Show every instance of recurring meetings (otherwise: one card per series with next date). Toggle re-fetches.</span>
+      </label>
+
       <div id="cal_import_status" style="font-size:12px;color:var(--text-secondary);min-height:18px;margin-bottom:10px;"></div>
 
       <div id="cal_import_results" style="display:none;">
@@ -5721,8 +5726,13 @@ function renderMeetings() {
 }
 
 function deleteMeeting(id) {
-  project.meetings = project.meetings.filter(m => m.id !== id);
+  const m = (project.meetings || []).find(x => x.id === id);
+  if (!confirm(`Delete meeting "${m?.title || 'Untitled'}"?\n\nThis only removes it from this project — Google Calendar event (if any) stays.`)) return;
+  project.meetings = (project.meetings || []).filter(m => m.id !== id);
   renderMeetings();
+  if (typeof renderCalendarUpcoming === 'function') renderCalendarUpcoming();
+  triggerAutoSave();
+  showToast('Meeting deleted.');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -6943,13 +6953,19 @@ function meetingCardHtml(m) {
   const calMatch = notes.match(/https?:\/\/(www\.)?google\.com\/calendar\/event\?[^\s]+/i);
   const calLink = calMatch ? calMatch[0] : '';
 
-  return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;background:var(--white);cursor:pointer;transition:box-shadow .15s,border-color .15s;"
+  return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;background:var(--white);cursor:pointer;transition:box-shadow .15s,border-color .15s;position:relative;"
     onclick="openMeetingEdit(${m.id})"
     onmouseover="this.style.borderColor='var(--purple)';this.style.boxShadow='0 2px 8px rgba(107,78,255,.15)';"
     onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none';">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
       <strong style="font-size:13px;color:var(--gray-dark);">${escHtml(m.title || 'Untitled meeting')}</strong>
-      <span style="font-size:11px;color:var(--blue);font-weight:600;white-space:nowrap;">${date}</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <span style="font-size:11px;color:var(--blue);font-weight:600;white-space:nowrap;">${date}</span>
+        <button onclick="event.stopPropagation(); deleteMeeting(${m.id});" title="Delete meeting from project"
+          style="background:transparent;border:none;color:var(--text-secondary);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:13px;line-height:1;transition:color .15s, background .15s;"
+          onmouseover="this.style.color='var(--red)';this.style.background='var(--red-light)';"
+          onmouseout="this.style.color='var(--text-secondary)';this.style.background='transparent';">🗑</button>
+      </div>
     </div>
     ${m.attendees ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">${escHtml(m.attendees)}</div>` : ''}
     ${meetLink || calLink ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;" onclick="event.stopPropagation();">
@@ -7447,13 +7463,14 @@ async function loadCalendarEvents() {
   const search    = document.getElementById('cal_import_search').value.trim();
   const daysPast  = parseInt(document.getElementById('cal_import_past').value, 10)   || 14;
   const daysFuture= parseInt(document.getElementById('cal_import_future').value, 10) || 60;
+  const expandRecurring = document.getElementById('cal_import_expand')?.checked || false;
   const status = document.getElementById('cal_import_status');
   const resultsBox = document.getElementById('cal_import_results');
   if (status) { status.style.color = 'var(--text-secondary)'; status.textContent = '⏳ Fetching events from your Google Calendar…'; }
   resultsBox.style.display = 'none';
 
   try {
-    const r = await aiCallApi('list-calendar-events', { search, daysPast, daysFuture });
+    const r = await aiCallApi('list-calendar-events', { search, daysPast, daysFuture, expandRecurring });
     _calendarImportCache = r.events || [];
     renderCalendarImportList();
     resultsBox.style.display = 'block';
