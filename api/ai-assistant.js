@@ -700,6 +700,184 @@ _Live updates auto-sync. Open the link anytime to see current state._`;
 }
 
 // ════════════════════════════════════════════════════════════════
+// CREATE SLACK CHANNEL + INVITE POCs (called from New Project wizard)
+// ════════════════════════════════════════════════════════════════
+// Required Slack bot scopes:
+//   channels:manage (public) OR groups:write (private)  ← for conversations.create
+//   users:read, users:read.email                        ← for users.lookupByEmail
+//   channels:write.invites OR groups:write              ← for conversations.invite
+//   bookmarks:write                                     ← optional, for project link bookmark
+async function createSlackChannel({ channelName, isPrivate, pocEmails, projectName, projectUrl, project, settings }) {
+  const botToken = process.env.SLACK_BOT_TOKEN;
+  if (!botToken) throw new Error('Slack bot token not configured.');
+  if (!channelName) throw new Error('channelName is required.');
+
+  // Slack channel names: lowercase, no spaces, only a-z 0-9 - _ ; ≤ 80 chars
+  const safeName = String(channelName).toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').slice(0, 80);
+
+  // 1) Create the channel
+  const createRes = await fetch('https://slack.com/api/conversations.create', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Authorization': `Bearer ${botToken}`,
+    },
+    body: JSON.stringify({ name: safeName, is_private: !!isPrivate }),
+  });
+  const createJson = await createRes.json().catch(() => ({}));
+
+  let channelId;
+  let channelNameFinal = safeName;
+  if (createJson.ok) {
+    channelId = createJson.channel.id;
+    channelNameFinal = createJson.channel.name;
+  } else if (createJson.error === 'name_taken') {
+    // Channel already exists — try to look up its ID so we can still invite
+    const listRes = await fetch('https://slack.com/api/conversations.list?types=public_channel,private_channel&limit=1000', {
+      headers: { 'Authorization': `Bearer ${botToken}` },
+    });
+    const listJson = await listRes.json().catch(() => ({}));
+    const found = (listJson.channels || []).find(c => c.name === safeName);
+    if (!found) {
+      throw new Error(`Channel #${safeName} exists but bot cannot see it. Invite the bot to that channel first, or pick a different name.`);
+    }
+    channelId = found.id;
+    channelNameFinal = found.name;
+  } else if (createJson.error === 'missing_scope') {
+    throw new Error('Slack channel create failed — bot needs the `channels:manage` scope (or `groups:write` for private channels). Add it in the Slack app settings and reinstall.');
+  } else {
+    throw new Error('Slack channel create failed: ' + (createJson.error || 'unknown'));
+  }
+
+  // 2) Set the channel topic / purpose to make the project obvious
+  try {
+    if (projectUrl) {
+      await fetch('https://slack.com/api/conversations.setTopic', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': `Bearer ${botToken}`,
+        },
+        body: JSON.stringify({ channel: channelId, topic: `📌 ${projectName || 'Project'} · ${projectUrl}` }),
+      });
+    }
+    if (projectName) {
+      await fetch('https://slack.com/api/conversations.setPurpose', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': `Bearer ${botToken}`,
+        },
+        body: JSON.stringify({ channel: channelId, purpose: `${projectName} project plan, status updates, and discussion.` }),
+      });
+    }
+  } catch (e) {
+    // non-fatal
+  }
+
+  // 3) Resolve POC emails → Slack user IDs, then invite in a single batch
+  const emails = (Array.isArray(pocEmails) ? pocEmails : [])
+    .map(e => String(e || '').trim())
+    .filter(Boolean);
+
+  const invitedUserIds = [];
+  const failedInvites = [];
+  for (const email of emails) {
+    try {
+      const lookRes = await fetch(`https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(email)}`, {
+        headers: { 'Authorization': `Bearer ${botToken}` },
+      });
+      const lookJson = await lookRes.json().catch(() => ({}));
+      if (lookJson.ok && lookJson.user && lookJson.user.id) {
+        invitedUserIds.push(lookJson.user.id);
+      } else {
+        failedInvites.push({ email, reason: lookJson.error || 'not_found' });
+      }
+    } catch (e) {
+      failedInvites.push({ email, reason: e.message });
+    }
+  }
+
+  let invitedCount = 0;
+  if (invitedUserIds.length) {
+    // Slack's invite endpoint accepts a comma-separated list of user IDs (up to 1000)
+    const inviteRes = await fetch('https://slack.com/api/conversations.invite', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Bearer ${botToken}`,
+      },
+      body: JSON.stringify({ channel: channelId, users: invitedUserIds.join(',') }),
+    });
+    const inviteJson = await inviteRes.json().catch(() => ({}));
+    if (inviteJson.ok) {
+      invitedCount = invitedUserIds.length;
+    } else if (inviteJson.error === 'already_in_channel') {
+      invitedCount = invitedUserIds.length; // count as success
+    } else if (inviteJson.errors && Array.isArray(inviteJson.errors)) {
+      // Some succeeded, some didn't — count the ones not in errors as invited
+      invitedCount = invitedUserIds.length - inviteJson.errors.length;
+      inviteJson.errors.forEach(e => failedInvites.push({ userId: e.user, reason: e.error }));
+    } else {
+      failedInvites.push({ batch: invitedUserIds.length, reason: inviteJson.error || 'unknown' });
+    }
+  }
+
+  // 4) Add the project plan as a channel bookmark (best-effort)
+  if (projectUrl) {
+    try {
+      await fetch('https://slack.com/api/bookmarks.add', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': `Bearer ${botToken}`,
+        },
+        body: JSON.stringify({
+          channel_id: channelId,
+          title: `📋 ${projectName || 'Project'} Plan`,
+          type: 'link',
+          link: projectUrl,
+          emoji: ':pushpin:',
+        }),
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // 5) Post a kickoff message
+  try {
+    const kickoffText = `:tada: *${projectName || 'New Project'}* channel is live!\n\n` +
+      (projectUrl ? `📋 *Project plan:* <${projectUrl}|Open tracker>\n` : '') +
+      `👥 *POCs invited:* ${invitedCount}\n` +
+      `\nUse this channel for project updates, decisions, and async discussion.`;
+    await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Bearer ${botToken}`,
+      },
+      body: JSON.stringify({ channel: channelId, text: kickoffText, mrkdwn: true }),
+    });
+  } catch (e) {
+    // ignore
+  }
+
+  // Construct the deep link to the channel (best-guess slack:// or web URL)
+  const channelUrl = `https://slack.com/app_redirect?channel=${channelId}`;
+
+  return {
+    ok: true,
+    channelId,
+    channelName: channelNameFinal,
+    channelUrl,
+    invitedCount,
+    failedInvites,
+    isPrivate: !!isPrivate,
+  };
+}
+
+// ════════════════════════════════════════════════════════════════
 // HELPERS — Slack, Email, Drive, PPTX
 // ════════════════════════════════════════════════════════════════
 // Try to have the bot auto-join a public channel (needs channels:join scope).
@@ -1078,6 +1256,9 @@ module.exports = async (req, res) => {
         break;
       case 'pin-project-to-slack':
         result = await pinProjectToSlack({ ...payload, project, settings, fbProjectId });
+        break;
+      case 'create-slack-channel':
+        result = await createSlackChannel({ ...payload, project, settings });
         break;
       default:
         return res.status(400).json({ error: 'Unknown action: ' + action });
