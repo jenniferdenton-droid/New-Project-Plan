@@ -7457,7 +7457,12 @@ async function loadCalendarEvents() {
     _calendarImportCache = r.events || [];
     renderCalendarImportList();
     resultsBox.style.display = 'block';
-    if (status) { status.style.color = 'var(--green)'; status.textContent = `✓ Found ${_calendarImportCache.length} event${_calendarImportCache.length===1?'':'s'}.`; }
+    if (status) {
+      status.style.color = 'var(--green)';
+      const ver = r.futureLogicVersion ? ` · server ${r.futureLogicVersion}` : ' · ⚠ server is on OLD code (redeploy without cache!)';
+      const serverTime = r.serverNow ? ` · ${new Date(r.serverNow).toLocaleTimeString()}` : '';
+      status.textContent = `✓ Found ${_calendarImportCache.length} event${_calendarImportCache.length===1?'':'s'}${serverTime}${ver}`;
+    }
     document.getElementById('cal_import_count').textContent = _calendarImportCache.length;
   } catch (e) {
     if (status) { status.style.color = 'var(--red)'; status.textContent = '✗ ' + e.message; }
