@@ -4931,8 +4931,13 @@ function toggleAiDone(id) {
 }
 
 function deleteActionItem(id) {
-  project.actionItems=(project.actionItems||[]).filter(x=>x.id!==id);
-  renderActionItems(); triggerAutoSave();
+  pauseListenerForDelete(); // pause Firebase listener so it can't echo the old data back
+  project.actionItems = (project.actionItems || []).filter(x => x.id !== id);
+  tombstone(_tombstonedAiIds, id); // block Firebase from restoring this AI when listener resumes
+  renderActionItems();
+  if (typeof renderMilestones === 'function') renderMilestones();
+  if (typeof updateDashboard === 'function') updateDashboard();
+  doAutoSave(); // immediate save so Firebase confirms the delete before listener reconnects
 }
 
 function renderActionItems() {
@@ -5752,10 +5757,12 @@ function renderMeetings() {
 function deleteMeeting(id) {
   const m = (project.meetings || []).find(x => x.id === id);
   if (!confirm(`Delete meeting "${m?.title || 'Untitled'}"?\n\nThis only removes it from this project — Google Calendar event (if any) stays.`)) return;
+  pauseListenerForDelete();
   project.meetings = (project.meetings || []).filter(m => m.id !== id);
+  tombstone(_tombstonedMeetingIds, id);
   renderMeetings();
   if (typeof renderCalendarUpcoming === 'function') renderCalendarUpcoming();
-  triggerAutoSave();
+  doAutoSave();
   showToast('Meeting deleted.');
 }
 
@@ -8207,6 +8214,9 @@ let lastRemoteSaveAt = '';
 // Tombstone sets — IDs deleted locally that the Firebase listener must never restore
 const _tombstonedRiskIds = new Set();
 const _tombstonedTaskIds = new Set();
+const _tombstonedAiIds   = new Set();
+const _tombstonedMeetingIds = new Set();
+const _tombstonedDecisionIds = new Set();
 function tombstone(set, id, ttl = 15000) {
   set.add(id);
   setTimeout(() => set.delete(id), ttl);
@@ -8682,6 +8692,15 @@ function startFirebaseListener() {
     }
     if (loaded.tasks && _tombstonedTaskIds.size > 0) {
       loaded.tasks = loaded.tasks.filter(t => !_tombstonedTaskIds.has(t.id));
+    }
+    if (loaded.actionItems && _tombstonedAiIds.size > 0) {
+      loaded.actionItems = loaded.actionItems.filter(a => !_tombstonedAiIds.has(a.id));
+    }
+    if (loaded.meetings && _tombstonedMeetingIds.size > 0) {
+      loaded.meetings = loaded.meetings.filter(m => !_tombstonedMeetingIds.has(m.id));
+    }
+    if (loaded.decisions && _tombstonedDecisionIds.size > 0) {
+      loaded.decisions = loaded.decisions.filter(d => !_tombstonedDecisionIds.has(d.id));
     }
 
     Object.assign(project, loaded);
