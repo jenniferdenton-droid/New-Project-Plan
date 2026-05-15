@@ -481,6 +481,136 @@ async function listCalendarEvents({ daysPast, daysFuture, search, project }) {
 }
 
 // ════════════════════════════════════════════════════════════════
+// ACTION 7: PIN PROJECT TO SLACK CHANNEL
+// Posts a rich project info card to the channel. Attempts to pin and set
+// channel topic if optional scopes are available — gracefully falls back.
+// ════════════════════════════════════════════════════════════════
+async function pinProjectToSlack({ project, settings, fbProjectId }) {
+  const botToken = process.env.SLACK_BOT_TOKEN;
+  if (!botToken) throw new Error('Slack bot token not configured.');
+  const channel = (settings && settings.slackChannel) || process.env.SLACK_CHANNEL;
+  if (!channel) throw new Error('No Slack channel set. Open AI Assistant → Settings → fill in Slack Channel.');
+
+  const projectUrl = `https://moxie-ops-project-plans.vercel.app/#${fbProjectId || ''}`;
+  const dueDate = project.dueDate
+    ? new Date(project.dueDate + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
+    : 'TBD';
+  const rag = (project.ragStatus && project.ragStatus.status) || 'Green';
+  const ragEmoji = rag === 'Red' ? ':red_circle:' : rag === 'Amber' ? ':large_yellow_circle:' : ':large_green_circle:';
+
+  // Count POCs by team
+  const stakeholders = project.stakeholders || {};
+  const pocs = Object.entries(stakeholders)
+    .filter(([_, s]) => s && s.included && s.contactName)
+    .map(([key, s]) => `${key}: ${s.contactName}`)
+    .slice(0, 8);
+
+  const text = `📌 *${project.name}* — Project Plan
+${ragEmoji} *Health:* ${rag} ${project.ragStatus?.reason ? `· _${project.ragStatus.reason}_` : ''}
+:dart: *Lead:* ${project.lead || 'TBD'}
+:calendar: *Target Launch:* ${dueDate}
+:link: *Live Project Plan:* <${projectUrl}|Open in tracker>
+${project.description ? '\n_' + project.description.slice(0, 200) + '_' : ''}
+${pocs.length ? '\n*Team POCs:*\n• ' + pocs.join('\n• ') : ''}
+
+_Live updates auto-sync. Open the link anytime to see current state._`;
+
+  // 1) Post the message
+  const postRes = await fetch('https://slack.com/api/chat.postMessage', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Authorization': `Bearer ${botToken}`,
+    },
+    body: JSON.stringify({ channel, text, mrkdwn: true }),
+  });
+  const postJson = await postRes.json().catch(() => ({}));
+  if (!postRes.ok || !postJson.ok) {
+    throw new Error('Slack post failed: ' + (postJson.error || postRes.statusText) +
+      (postJson.error === 'not_in_channel' ? ' — invite the bot to the channel first.' : ''));
+  }
+  const ts = postJson.ts;          // timestamp of the message
+  const channelId = postJson.channel; // resolved channel ID
+
+  const result = { posted: true, channel, ts, projectUrl, pinned: false, topicSet: false, warnings: [] };
+
+  // 2) Try to pin the message (needs pins:write scope)
+  try {
+    const pinRes = await fetch('https://slack.com/api/pins.add', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Bearer ${botToken}`,
+      },
+      body: JSON.stringify({ channel: channelId, timestamp: ts }),
+    });
+    const pinJson = await pinRes.json().catch(() => ({}));
+    if (pinJson.ok) {
+      result.pinned = true;
+    } else if (pinJson.error === 'missing_scope') {
+      result.warnings.push('Auto-pin requires the `pins:write` scope. Pin the message manually in Slack (Slack menu → Pin to channel) or add the scope and reinstall.');
+    } else if (pinJson.error === 'already_pinned') {
+      result.pinned = true;
+    } else {
+      result.warnings.push('Pin failed: ' + (pinJson.error || 'unknown'));
+    }
+  } catch (e) {
+    result.warnings.push('Pin attempt error: ' + e.message);
+  }
+
+  // 3) Try to set the channel topic to include the project URL (optional)
+  try {
+    const topic = `📌 ${project.name} · ${projectUrl}`;
+    const topicRes = await fetch('https://slack.com/api/conversations.setTopic', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Bearer ${botToken}`,
+      },
+      body: JSON.stringify({ channel: channelId, topic }),
+    });
+    const topicJson = await topicRes.json().catch(() => ({}));
+    if (topicJson.ok) {
+      result.topicSet = true;
+    } else if (topicJson.error === 'missing_scope') {
+      // silently skip — topic is nice-to-have
+    } else if (topicJson.error !== 'no_permission' && topicJson.error !== 'not_in_channel') {
+      result.warnings.push('Channel topic update skipped: ' + (topicJson.error || 'unknown'));
+    }
+  } catch (e) {
+    // silently ignore
+  }
+
+  // 4) Try to add a channel bookmark (newer Slack API, optional)
+  try {
+    const bookmarkRes = await fetch('https://slack.com/api/bookmarks.add', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Bearer ${botToken}`,
+      },
+      body: JSON.stringify({
+        channel_id: channelId,
+        title: `📋 ${project.name} Project Plan`,
+        type: 'link',
+        link: projectUrl,
+        emoji: ':pushpin:',
+      }),
+    });
+    const bookmarkJson = await bookmarkRes.json().catch(() => ({}));
+    if (bookmarkJson.ok) {
+      result.bookmarkAdded = true;
+    } else if (bookmarkJson.error === 'missing_scope') {
+      // silently skip — bookmarks are nice-to-have
+    }
+  } catch (e) {
+    // silently ignore
+  }
+
+  return result;
+}
+
+// ════════════════════════════════════════════════════════════════
 // HELPERS — Slack, Email, Drive, PPTX
 // ════════════════════════════════════════════════════════════════
 async function postToSlack({ text, settings }) {
@@ -778,6 +908,9 @@ module.exports = async (req, res) => {
         break;
       case 'list-calendar-events':
         result = await listCalendarEvents({ ...payload, project });
+        break;
+      case 'pin-project-to-slack':
+        result = await pinProjectToSlack({ ...payload, project, settings, fbProjectId });
         break;
       default:
         return res.status(400).json({ error: 'Unknown action: ' + action });
