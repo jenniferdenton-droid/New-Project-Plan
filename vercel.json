@@ -1,5 +1,12 @@
 {
-    "buildCommand": null,
-    "outputDirectory": ".",
-    "framework": null
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/ai-assistant.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" }
+  ]
 }
