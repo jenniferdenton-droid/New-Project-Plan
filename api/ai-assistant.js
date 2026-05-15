@@ -281,6 +281,86 @@ async function quickSend({ channel, subject, body, polish, project, settings }) 
 }
 
 // ════════════════════════════════════════════════════════════════
+// ACTION 5: SCHEDULE MEETING (Google Calendar event + invites)
+// ════════════════════════════════════════════════════════════════
+async function scheduleMeetingAction({ title, date, startTime, duration, description, location, attendees, sendEmail: doEmail, postSlack, project, settings }) {
+  if (!title || !date || !startTime) throw new Error('title, date, and startTime are required.');
+  if (!attendees || attendees.length === 0) throw new Error('No attendees.');
+
+  // Build start + end in ISO format (assume local time, no TZ conversion server-side)
+  const startISO = `${date}T${startTime}:00`;
+  const startDt = new Date(startISO);
+  const endDt   = new Date(startDt.getTime() + (duration || 30) * 60000);
+  const endISO  = endDt.toISOString().slice(0, 19);
+
+  const result = { eventLink: null, notifications: {} };
+
+  // 1) Create the Google Calendar event with invites
+  try {
+    const calendar = getCalendarClient();
+    const event = {
+      summary: `[${project.name}] ${title}`,
+      description: `${description || ''}\n\n— Project: ${project.name}\n— Lead: ${project.lead || 'TBD'}\n— Project tracker: https://moxie-ops-project-plans.vercel.app/`.trim(),
+      location: location || '',
+      start: { dateTime: startISO, timeZone: 'America/New_York' },
+      end:   { dateTime: endISO,   timeZone: 'America/New_York' },
+      attendees: attendees.map(a => ({ email: a.email, displayName: a.name || undefined })),
+      reminders: { useDefault: true },
+    };
+    const created = await calendar.events.insert({
+      calendarId: 'primary',
+      requestBody: event,
+      sendUpdates: 'all', // Sends invite emails to all attendees natively
+    });
+    result.eventLink = created.data.htmlLink;
+  } catch (e) {
+    throw new Error('Calendar create failed: ' + (e.message || String(e)));
+  }
+
+  // 2) Optional confirmation email (in addition to native Calendar invite)
+  if (doEmail) {
+    const recipients = attendees.map(a => a.email);
+    const dateFmt = startDt.toLocaleString('en-US', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+    const html = `
+      <div style="font-family:-apple-system,Segoe UI,sans-serif;max-width:600px;color:#1A1A2E;">
+        <h2 style="color:#1F1A47;margin-bottom:6px;">${escapeHtml(title)}</h2>
+        <p style="color:#666;font-size:13px;margin-top:0;">${escapeHtml(project.name)} · ${escapeHtml(dateFmt)} · ${duration} min</p>
+        ${description ? `<p style="font-size:14px;line-height:1.5;">${escapeHtml(description)}</p>` : ''}
+        ${location ? `<p style="font-size:14px;"><strong>Location:</strong> ${escapeHtml(location)}</p>` : ''}
+        <p style="margin:18px 0;"><a href="${result.eventLink}" style="background:#1565C0;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600;">→ Open in Google Calendar</a></p>
+        <p style="font-size:12px;color:#888;">You'll also receive a separate calendar invite from Google. — ${escapeHtml(settings.fromName || 'Jen')}</p>
+      </div>`;
+    try {
+      await sendEmail({
+        to: recipients, cc: [],
+        subject: title,
+        html,
+        fromName: settings.fromName,
+        projectName: project.name,
+      });
+      result.notifications.email = recipients.length;
+    } catch (e) {
+      // Don't fail the whole schedule if email fails — calendar invite already went
+      console.warn('Confirmation email failed:', e.message);
+    }
+  }
+
+  // 3) Optional Slack post
+  if (postSlack) {
+    try {
+      const dateFmt = startDt.toLocaleString('en-US', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+      const slackText = `:calendar: *${title}* — ${project.name}\n${dateFmt} · ${duration} min\n${description ? description + '\n' : ''}${location ? '*Location:* ' + location + '\n' : ''}${result.eventLink ? '<' + result.eventLink + '|Open in Calendar>' : ''}\n*Attendees:* ${attendees.map(a => a.name || a.email).join(', ')}`;
+      await postToSlack({ text: slackText, settings });
+      result.notifications.slack = true;
+    } catch (e) {
+      console.warn('Slack post failed:', e.message);
+    }
+  }
+
+  return result;
+}
+
+// ════════════════════════════════════════════════════════════════
 // HELPERS — Slack, Email, Drive, PPTX
 // ════════════════════════════════════════════════════════════════
 async function postToSlack({ text, settings }) {
@@ -326,9 +406,12 @@ async function sendEmail({ to, cc, subject, html, attachments, fromName, project
   const fromEmail = process.env.GMAIL_FROM_EMAIL;
   if (!fromEmail) throw new Error('GMAIL_FROM_EMAIL not set.');
 
-  // Auto-prefix subject with [Project Name] if not already present
-  if (projectName && subject && !subject.includes(`[${projectName}]`) && !subject.toLowerCase().includes(projectName.toLowerCase())) {
-    subject = `[${projectName}] ${subject}`;
+  // Auto-prefix subject with [Project Name] unless it already starts with [ProjectName]
+  if (projectName) {
+    const prefix = `[${projectName}]`;
+    if (!subject || !subject.startsWith(prefix)) {
+      subject = `${prefix} ${subject || ''}`.trim();
+    }
   }
   const gmail = getGmailClient();
   const fromHeader = fromName ? `"${fromName.replace(/"/g, '')}" <${fromEmail}>` : fromEmail;
@@ -569,6 +652,9 @@ module.exports = async (req, res) => {
         break;
       case 'quick-send':
         result = await quickSend({ ...payload, project, settings });
+        break;
+      case 'schedule-meeting':
+        result = await scheduleMeetingAction({ ...payload, project, settings });
         break;
       default:
         return res.status(400).json({ error: 'Unknown action: ' + action });
