@@ -411,51 +411,71 @@ async function listCalendarEvents({ daysPast, daysFuture, search, project }) {
   const timeMin = new Date(now.getTime() - (daysPast || 30) * 86400000).toISOString();
   const timeMax = new Date(now.getTime() + (daysFuture || 60) * 86400000).toISOString();
 
-  // Use singleEvents=false to KEEP recurring events as a single master entry
-  // (rather than exploding into individual instances). That way the user
-  // imports the series once.
-  const res = await calendar.events.list({
+  // Pass 1: get expanded instances (singleEvents=true) — this returns REAL future
+  // occurrences of recurring events with their actual dates, plus single events.
+  const instancesRes = await calendar.events.list({
+    calendarId: 'primary',
+    timeMin, timeMax,
+    singleEvents: true,
+    orderBy: 'startTime',
+    showDeleted: false,
+    maxResults: 500,
+    q: search || undefined,
+  });
+
+  // Pass 2: get the masters (singleEvents=false) just to read each series' RRULE
+  // so we can show a human-readable recurrence label.
+  const mastersRes = await calendar.events.list({
     calendarId: 'primary',
     timeMin, timeMax,
     singleEvents: false,
     showDeleted: false,
     maxResults: 250,
-    q: search || undefined, // free-text filter (e.g., project name)
-    orderBy: undefined,     // can't use orderBy without singleEvents
+    q: search || undefined,
+  });
+  const masterRrule = {};
+  (mastersRes.data.items || []).forEach(m => {
+    if (m.recurrence && m.recurrence.length > 0) masterRrule[m.id] = m.recurrence[0];
   });
 
-  const items = (res.data.items || []).map(ev => {
-    // Surface a friendly shape
+  const describeRrule = (r) => {
+    if (!r) return 'Recurring';
+    if (/FREQ=DAILY/.test(r)) return 'Daily';
+    if (/FREQ=WEEKLY;INTERVAL=2/.test(r)) return 'Every 2 weeks';
+    if (/FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR/.test(r)) return 'Weekdays';
+    if (/FREQ=WEEKLY/.test(r)) return 'Weekly';
+    if (/FREQ=MONTHLY/.test(r)) return 'Monthly';
+    return 'Recurring';
+  };
+
+  // Walk instances. For recurring series, keep only the next-upcoming instance
+  // (first time we see that recurringEventId). Single events all pass through.
+  const seenSeries = new Set();
+  const items = [];
+  (instancesRes.data.items || []).forEach(ev => {
     const startObj = ev.start || {};
     const startDate = startObj.dateTime || startObj.date || '';
-    const recur = ev.recurrence && ev.recurrence.length > 0;
-    let recurDesc = '';
-    if (recur) {
-      const r = ev.recurrence[0] || '';
-      if (/FREQ=DAILY/.test(r)) recurDesc = 'Daily';
-      else if (/FREQ=WEEKLY;INTERVAL=2/.test(r)) recurDesc = 'Every 2 weeks';
-      else if (/FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR/.test(r)) recurDesc = 'Weekdays';
-      else if (/FREQ=WEEKLY/.test(r)) recurDesc = 'Weekly';
-      else if (/FREQ=MONTHLY/.test(r)) recurDesc = 'Monthly';
-      else recurDesc = 'Recurring';
+    const seriesId = ev.recurringEventId || null;
+    if (seriesId) {
+      if (seenSeries.has(seriesId)) return;
+      seenSeries.add(seriesId);
     }
-    return {
+    items.push({
       id: ev.id,
       title: ev.summary || '(no title)',
       description: ev.description || '',
       location: ev.location || '',
       startISO: startDate,
       attendees: (ev.attendees || []).map(a => ({ email: a.email, name: a.displayName || '' })),
-      isRecurring: recur,
-      recurDesc,
+      isRecurring: !!seriesId,
+      recurDesc: seriesId ? describeRrule(masterRrule[seriesId]) : '',
       meetLink: (ev.conferenceData && ev.conferenceData.entryPoints || [])
         .filter(e => e.entryPointType === 'video').map(e => e.uri)[0] || '',
       htmlLink: ev.htmlLink || '',
       organizer: (ev.organizer && (ev.organizer.email || ev.organizer.displayName)) || '',
-    };
-  })
-  // sort by start date ascending
-  .sort((a, b) => (a.startISO || '').localeCompare(b.startISO || ''));
+    });
+  });
+  items.sort((a, b) => (a.startISO || '').localeCompare(b.startISO || ''));
 
   return { events: items };
 }
