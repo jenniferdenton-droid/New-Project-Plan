@@ -942,11 +942,47 @@
 <!-- ===================== PLAN (Milestones + Tasks + Action Items) ===================== -->
 <div id="tab-milestones" class="tab-content">
   <!-- Plan toolbar -->
-  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
     <button class="btn btn-secondary btn-sm" onclick="openPeopleModal()" title="Manage project team members">👥 People</button>
     <button class="btn btn-secondary btn-sm" onclick="openTaskTemplatesModal()" title="Load a pre-built task template pack">📋 Load Templates</button>
     <button class="btn btn-secondary btn-sm" onclick="openDocImportModal()" title="Paste a proposal to auto-extract tasks">📄 Import from Doc</button>
   </div>
+
+  <!-- Plan filter bar -->
+  <div style="background:var(--gray-light);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <span style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;">🔍 Filter</span>
+
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+      <label style="font-weight:600;color:var(--gray-dark);">Due from</label>
+      <input type="date" id="planFilterDueFrom" onchange="renderMilestones()" style="font-size:12px;padding:3px 6px;">
+      <label style="font-weight:600;color:var(--gray-dark);">to</label>
+      <input type="date" id="planFilterDueTo" onchange="renderMilestones()" style="font-size:12px;padding:3px 6px;">
+    </div>
+
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-dark);cursor:pointer;">
+      <input type="checkbox" id="planFilterMissingDue" onchange="renderMilestones()">
+      Missing due date only
+    </label>
+
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-dark);cursor:pointer;">
+      <input type="checkbox" id="planFilterPastDue" onchange="renderMilestones()">
+      Past due only
+    </label>
+
+    <select id="planFilterStatus" onchange="renderMilestones()" style="font-size:12px;padding:3px 8px;">
+      <option value="">All statuses</option>
+      <option value="Not Started">Not Started</option>
+      <option value="In Progress">In Progress</option>
+      <option value="At Risk">At Risk</option>
+      <option value="Done">Done</option>
+      <option value="Blocked">Blocked</option>
+      <option value="On Hold">On Hold</option>
+    </select>
+
+    <span id="planFilterCount" style="font-size:11px;color:var(--text-secondary);font-weight:600;margin-left:auto;"></span>
+    <button class="btn btn-secondary btn-sm" onclick="clearPlanFilters()" style="font-size:11px;">Clear filters</button>
+  </div>
+
   <div id="planView"></div>
 </div>
 
@@ -4506,6 +4542,16 @@ function renderPlanView() {
   if (tbody) renderTasks();
 }
 
+function clearPlanFilters() {
+  ['planFilterDueFrom','planFilterDueTo','planFilterStatus'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  ['planFilterMissingDue','planFilterPastDue'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.checked = false;
+  });
+  renderMilestones();
+}
+
 function renderMilestones() {
   const root = document.getElementById('planView');
   if (!root) return;
@@ -4518,10 +4564,52 @@ function renderMilestones() {
   if (typeof refreshOwnerDatalist === 'function') refreshOwnerDatalist();
 
   const ms      = (project.milestones || []);
-  const tasks   = project.tasks || [];
-  const ais     = project.actionItems || [];
   const today   = new Date(); today.setHours(0,0,0,0);
   const todayMs = today.getTime();
+
+  // ── Apply Plan filters ───────────────────────────────
+  const fDueFrom    = document.getElementById('planFilterDueFrom')?.value || '';
+  const fDueTo      = document.getElementById('planFilterDueTo')?.value || '';
+  const fMissingDue = document.getElementById('planFilterMissingDue')?.checked || false;
+  const fPastDue    = document.getElementById('planFilterPastDue')?.checked || false;
+  const fStatus     = document.getElementById('planFilterStatus')?.value || '';
+  const filterActive = fDueFrom || fDueTo || fMissingDue || fPastDue || fStatus;
+
+  function applyFilters(items, isAi) {
+    if (!filterActive) return items;
+    return items.filter(item => {
+      const due = item.dueDate || '';
+      if (fMissingDue && due) return false;
+      if (fPastDue) {
+        if (!due) return false;
+        if (new Date(due + 'T00:00:00').getTime() >= todayMs) return false;
+        const doneStatus = isAi ? (item.status === 'Done') : (item.status === 'Done');
+        if (doneStatus) return false;
+      }
+      if (fDueFrom && due && due < fDueFrom) return false;
+      if (fDueTo && due && due > fDueTo) return false;
+      if (fDueFrom && !due) return false; // can't be in range if no date
+      if (fDueTo && !due) return false;
+      if (fStatus && item.status !== fStatus) return false;
+      return true;
+    });
+  }
+
+  const tasks = applyFilters(project.tasks || [], false);
+  const ais   = applyFilters(project.actionItems || [], true);
+
+  // Update filter count badge
+  const countEl = document.getElementById('planFilterCount');
+  if (countEl) {
+    if (filterActive) {
+      const totalT = (project.tasks || []).length;
+      const totalA = (project.actionItems || []).length;
+      countEl.textContent = `Showing ${tasks.length}/${totalT} tasks · ${ais.length}/${totalA} action items`;
+      countEl.style.color = 'var(--purple)';
+    } else {
+      countEl.textContent = '';
+    }
+  }
 
   // ── Add-milestone inline form ─────────────────────────
   const addForm = `
