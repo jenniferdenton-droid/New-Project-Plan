@@ -405,7 +405,7 @@ async function scheduleMeetingAction({ title, date, startTime, duration, descrip
 // ACTION 6: LIST CALENDAR EVENTS (pull from Google Calendar)
 // Used to import existing meetings (including recurring) into the project.
 // ════════════════════════════════════════════════════════════════
-async function listCalendarEvents({ daysPast, daysFuture, search, project }) {
+async function listCalendarEvents({ daysPast, daysFuture, search, expandRecurring, project }) {
   const calendar = getCalendarClient();
   const now = new Date();
   const timeMin = new Date(now.getTime() - (daysPast || 30) * 86400000).toISOString();
@@ -474,24 +474,28 @@ async function listCalendarEvents({ daysPast, daysFuture, search, project }) {
 
   (instancesRes.data.items || []).forEach(ev => {
     const seriesId = ev.recurringEventId || null;
-    if (seriesId) {
+    if (seriesId && !expandRecurring) {
+      // Default mode: group by series so we can pick the next-upcoming
       if (!seriesInstances[seriesId]) seriesInstances[seriesId] = [];
       seriesInstances[seriesId].push(ev);
     } else {
-      items.push(mapEvent(ev, null));
+      // Single event OR expandRecurring mode: pass every instance through as its own item
+      items.push(mapEvent(ev, seriesId));
     }
   });
 
-  Object.keys(seriesInstances).forEach(sid => {
-    const arr = seriesInstances[sid];
-    // arr is already sorted ascending because orderBy:'startTime'
-    const future = arr.find(ev => {
-      const start = ev.start && (ev.start.dateTime || ev.start.date);
-      return start && new Date(start).getTime() >= nowMs;
+  // If NOT expanding, dedupe each recurring series to its next-upcoming instance
+  if (!expandRecurring) {
+    Object.keys(seriesInstances).forEach(sid => {
+      const arr = seriesInstances[sid];
+      const future = arr.find(ev => {
+        const start = ev.start && (ev.start.dateTime || ev.start.date);
+        return start && new Date(start).getTime() >= nowMs;
+      });
+      const chosen = future || arr[arr.length - 1];
+      items.push(mapEvent(chosen, sid));
     });
-    const chosen = future || arr[arr.length - 1]; // fallback: most recent past
-    items.push(mapEvent(chosen, sid));
-  });
+  }
 
   items.sort((a, b) => (a.startISO || '').localeCompare(b.startISO || ''));
 
