@@ -321,7 +321,6 @@
   <button class="tab-btn"        data-tab="milestones"  onclick="switchTab('milestones')">🗂 Plan</button>
   <button class="tab-btn"        data-tab="workstreams" onclick="switchTab('workstreams')">🧭 Workstreams</button>
   <button class="tab-btn"        data-tab="launch"      onclick="switchTab('launch')">🚀 Launch Checklist</button>
-  <button class="tab-btn"        data-tab="meetings"    onclick="switchTab('meetings')">📝 Meeting Notes</button>
   <button class="tab-btn"        data-tab="calendar"    onclick="switchTab('calendar')">📅 Calendar</button>
   <button class="tab-btn"        data-tab="aiassistant" onclick="switchTab('aiassistant')" style="color:var(--purple);font-weight:700;">🤖 AI Assistant</button>
   <button class="tab-btn"        data-tab="links"       onclick="switchTab('links')">🔗 Links</button>
@@ -753,11 +752,9 @@
 </div>
 
 <!-- ===================== MEETINGS ===================== -->
-<div id="tab-meetings" class="tab-content">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-    <h2 style="font-size:16px;font-weight:700;color:var(--gray-dark);">📝 Meeting Notes</h2>
-    <button class="btn btn-primary" onclick="openNewMeetingModal()">＋ Add Meeting</button>
-  </div>
+<!-- Meeting Notes tab content removed from nav — manage meetings from 📅 Calendar tab instead.
+     The container stays here (hidden) so legacy render calls don't error. -->
+<div id="tab-meetings" class="tab-content" style="display:none;">
   <div id="meetingsContainer"></div>
 </div>
 
