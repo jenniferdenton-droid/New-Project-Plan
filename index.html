@@ -1370,8 +1370,22 @@
         <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">CC List (optional)</label>
         <input type="text" id="ai_set_cc" placeholder="cfo@joinmoxie.com" oninput="aiSettingsChange()" style="font-size:12px;">
       </div>
+      <!-- Pin to Slack -->
+      <div style="background:linear-gradient(90deg,#E3F2FD,transparent);border:1px solid #1565C0;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:200px;">
+            <div style="font-weight:700;font-size:13px;color:var(--gray-dark);margin-bottom:4px;">📌 Pin this project to your Slack channel</div>
+            <div style="font-size:12px;color:var(--text-secondary);">Posts a project info card (lead, due date, RAG, POCs, live link) to the channel set above. Tries to auto-pin + set channel topic + add as bookmark.</div>
+          </div>
+          <button class="btn btn-primary btn-sm" style="white-space:nowrap;" onclick="pinProjectToSlack()">
+            📌 Pin to Slack
+          </button>
+        </div>
+        <div id="ai_pin_result" style="font-size:12px;color:var(--text-secondary);margin-top:8px;min-height:18px;"></div>
+      </div>
+
       <div style="background:#FFFDE7;border:1px solid #F9A825;border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--gray-dark);">
-        <strong>⚙️ One-time setup:</strong> Add these in Vercel → Settings → Environment Variables: <code>ANTHROPIC_API_KEY</code>, <code>SLACK_BOT_TOKEN</code>, <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>, <code>GOOGLE_REFRESH_TOKEN</code>, <code>GMAIL_FROM_EMAIL</code>. See deploy-bundle README.
+        <strong>⚙️ One-time setup:</strong> Add these in Vercel → Settings → Environment Variables: <code>ANTHROPIC_API_KEY</code>, <code>SLACK_BOT_TOKEN</code>, <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>, <code>GOOGLE_REFRESH_TOKEN</code>, <code>GMAIL_FROM_EMAIL</code>. For full Slack auto-pin: add <code>pins:write</code>, <code>conversations:write.topic</code>, <code>bookmarks:write</code> scopes to your bot.
       </div>
     </div>
   </div>
@@ -6744,6 +6758,32 @@ async function aiSendStatusUpdate() {
   } catch (e) {
     aiSetStatus('ai_su_result', '✗ ' + e.message, 'error');
     aiSetGlobalBadge('⚠️ ' + e.message, 'error');
+  }
+}
+
+// ── PIN PROJECT TO SLACK CHANNEL ───────────────────
+async function pinProjectToSlack() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  if (!project.aiSettings || !project.aiSettings.slackChannel) {
+    showToast('Set a Slack channel in Settings first.', 'error'); return;
+  }
+  const status = document.getElementById('ai_pin_result');
+  if (status) { status.style.color = 'var(--text-secondary)'; status.textContent = '⏳ Posting to Slack...'; }
+  try {
+    const r = await aiCallApi('pin-project-to-slack', {});
+    const bits = [];
+    if (r.posted)       bits.push('✓ Posted');
+    if (r.pinned)       bits.push('✓ Pinned');
+    if (r.topicSet)     bits.push('✓ Topic set');
+    if (r.bookmarkAdded)bits.push('✓ Bookmark added');
+    let msg = bits.join(' · ');
+    if (r.warnings && r.warnings.length) {
+      msg += '<br><span style="color:var(--orange);font-size:11px;">⚠ ' + r.warnings.map(escHtml).join(' · ') + '</span>';
+    }
+    if (status) { status.style.color = 'var(--green)'; status.innerHTML = msg; }
+    showToast('Posted to ' + project.aiSettings.slackChannel);
+  } catch (e) {
+    if (status) { status.style.color = 'var(--red)'; status.textContent = '✗ ' + e.message; }
   }
 }
 
