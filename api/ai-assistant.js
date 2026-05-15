@@ -448,24 +448,20 @@ async function listCalendarEvents({ daysPast, daysFuture, search, project }) {
     return 'Recurring';
   };
 
-  // Walk instances. For recurring series, keep only the next-upcoming instance
-  // (first time we see that recurringEventId). Single events all pass through.
-  const seenSeries = new Set();
+  // For recurring series: pick the NEXT UPCOMING instance (>= now), not the earliest.
+  // Falls back to the most recent past instance only if no future one exists in the window.
+  const nowMs = Date.now();
+  const seriesInstances = {};
   const items = [];
-  (instancesRes.data.items || []).forEach(ev => {
+
+  function mapEvent(ev, seriesId) {
     const startObj = ev.start || {};
-    const startDate = startObj.dateTime || startObj.date || '';
-    const seriesId = ev.recurringEventId || null;
-    if (seriesId) {
-      if (seenSeries.has(seriesId)) return;
-      seenSeries.add(seriesId);
-    }
-    items.push({
+    return {
       id: ev.id,
       title: ev.summary || '(no title)',
       description: ev.description || '',
       location: ev.location || '',
-      startISO: startDate,
+      startISO: startObj.dateTime || startObj.date || '',
       attendees: (ev.attendees || []).map(a => ({ email: a.email, name: a.displayName || '' })),
       isRecurring: !!seriesId,
       recurDesc: seriesId ? describeRrule(masterRrule[seriesId]) : '',
@@ -473,8 +469,30 @@ async function listCalendarEvents({ daysPast, daysFuture, search, project }) {
         .filter(e => e.entryPointType === 'video').map(e => e.uri)[0] || '',
       htmlLink: ev.htmlLink || '',
       organizer: (ev.organizer && (ev.organizer.email || ev.organizer.displayName)) || '',
-    });
+    };
+  }
+
+  (instancesRes.data.items || []).forEach(ev => {
+    const seriesId = ev.recurringEventId || null;
+    if (seriesId) {
+      if (!seriesInstances[seriesId]) seriesInstances[seriesId] = [];
+      seriesInstances[seriesId].push(ev);
+    } else {
+      items.push(mapEvent(ev, null));
+    }
   });
+
+  Object.keys(seriesInstances).forEach(sid => {
+    const arr = seriesInstances[sid];
+    // arr is already sorted ascending because orderBy:'startTime'
+    const future = arr.find(ev => {
+      const start = ev.start && (ev.start.dateTime || ev.start.date);
+      return start && new Date(start).getTime() >= nowMs;
+    });
+    const chosen = future || arr[arr.length - 1]; // fallback: most recent past
+    items.push(mapEvent(chosen, sid));
+  });
+
   items.sort((a, b) => (a.startISO || '').localeCompare(b.startISO || ''));
 
   return { events: items };
@@ -599,30 +617,75 @@ _Live updates auto-sync. Open the link anytime to see current state._`;
     // silently ignore
   }
 
-  // 4) Try to add a channel bookmark (newer Slack API, optional)
+  // 4) Add channel bookmarks (links at top of channel) — needs bookmarks:write scope
+  // Adds: 1) Project Plan URL, 2) all links from project.links, dedupe by URL.
+  // Get existing bookmarks first to avoid duplicates.
+  result.bookmarksAdded = 0;
+  result.bookmarksSkipped = 0;
   try {
-    const bookmarkRes = await fetch('https://slack.com/api/bookmarks.add', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Authorization': `Bearer ${botToken}`,
-      },
-      body: JSON.stringify({
-        channel_id: channelId,
+    // List existing channel bookmarks
+    const listRes = await fetch(`https://slack.com/api/bookmarks.list?channel_id=${encodeURIComponent(channelId)}`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${botToken}` },
+    });
+    const listJson = await listRes.json().catch(() => ({}));
+    if (!listJson.ok && listJson.error === 'missing_scope') {
+      result.warnings.push('Channel bookmarks need `bookmarks:write` scope. Add it to the bot and reinstall.');
+    } else {
+      const existing = new Set((listJson.bookmarks || []).map(b => (b.link || '').toLowerCase()));
+
+      // Build the bookmark list: project plan first, then project.links
+      const wanted = [];
+      wanted.push({
         title: `📋 ${project.name} Project Plan`,
-        type: 'link',
         link: projectUrl,
         emoji: ':pushpin:',
-      }),
-    });
-    const bookmarkJson = await bookmarkRes.json().catch(() => ({}));
-    if (bookmarkJson.ok) {
-      result.bookmarkAdded = true;
-    } else if (bookmarkJson.error === 'missing_scope') {
-      // silently skip — bookmarks are nice-to-have
+      });
+      (project.links || []).forEach(l => {
+        if (!l || !l.url) return;
+        wanted.push({
+          title: (l.title || l.url).slice(0, 80),
+          link: l.url,
+          emoji: l.category ? ':link:' : ':link:',
+        });
+      });
+
+      // Add each bookmark, skipping ones already present
+      for (const b of wanted) {
+        if (existing.has((b.link || '').toLowerCase())) {
+          result.bookmarksSkipped++;
+          continue;
+        }
+        try {
+          const addRes = await fetch('https://slack.com/api/bookmarks.add', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Authorization': `Bearer ${botToken}`,
+            },
+            body: JSON.stringify({
+              channel_id: channelId,
+              title: b.title,
+              type: 'link',
+              link: b.link,
+              emoji: b.emoji,
+            }),
+          });
+          const addJson = await addRes.json().catch(() => ({}));
+          if (addJson.ok) result.bookmarksAdded++;
+          else if (addJson.error === 'missing_scope') {
+            result.warnings.push('Bookmark add failed — `bookmarks:write` scope missing.');
+            break;
+          } else {
+            result.warnings.push(`Bookmark "${b.title}" failed: ${addJson.error || 'unknown'}`);
+          }
+        } catch (e) {
+          result.warnings.push(`Bookmark "${b.title}" error: ${e.message}`);
+        }
+      }
     }
   } catch (e) {
-    // silently ignore
+    result.warnings.push('Bookmarks step error: ' + e.message);
   }
 
   return result;
