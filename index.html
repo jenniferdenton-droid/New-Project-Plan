@@ -979,6 +979,10 @@
       <option value="On Hold">On Hold</option>
     </select>
 
+    <select id="planFilterOwner" onchange="renderMilestones()" style="font-size:12px;padding:3px 8px;">
+      <option value="">All owners</option>
+    </select>
+
     <span id="planFilterCount" style="font-size:11px;color:var(--text-secondary);font-weight:600;margin-left:auto;"></span>
     <button class="btn btn-secondary btn-sm" onclick="clearPlanFilters()" style="font-size:11px;">Clear filters</button>
   </div>
@@ -2070,9 +2074,36 @@
             <textarea id="wExternalText" rows="3" placeholder="Vendor name, contact person, scope of work, contract status..."></textarea>
           </div>
         </div>
+
+        <!-- 🟣 Create Slack channel + invite POCs -->
+        <div style="background:#F3E8FF;border:1px solid var(--purple);border-radius:var(--radius-sm);padding:14px;margin-top:16px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="wCreateSlack" onchange="toggleWSlack()">
+            <span style="font-size:14px;font-weight:600;color:var(--purple);">💬 Create a Slack channel and invite project POCs</span>
+          </label>
+          <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0 24px;">
+            Creates a new channel with the bot, sets the project plan as a bookmark, and invites every included stakeholder with an email.
+          </p>
+          <div id="wSlackDetail" style="display:none;margin-top:10px;">
+            <div class="form-group" style="margin-bottom:8px;">
+              <label style="font-size:12px;">Channel name *</label>
+              <input type="text" id="wSlackChannel" placeholder="proj-bookkeeping-launch"
+                style="font-family:monospace;font-size:13px;"
+                oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9_-]/g,'-').slice(0,80)">
+              <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+                Lowercase letters, numbers, hyphens, underscores. Slack will reject anything else.
+              </div>
+            </div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-top:4px;">
+              <input type="checkbox" id="wSlackPrivate">
+              <span>Make this a private channel</span>
+            </label>
+          </div>
+        </div>
+
         <div style="background:var(--teal-light);border-radius:var(--radius-sm);padding:16px;margin-top:16px;">
           <strong style="font-size:13px;">✅ Ready to create your project!</strong>
-          <p style="font-size:12px;color:var(--text-secondary);margin-top:4px;">After creating, you'll be taken to the Dashboard. Use the Tasks tab to add deliverables and the Launch Checklist to track readiness.</p>
+          <p style="font-size:12px;color:var(--text-secondary);margin-top:4px;">After creating, you'll be taken to the Launch Checklist. Use the Plan tab to add deliverables and track readiness.</p>
         </div>
       </div>
     </div>
@@ -2981,6 +3012,22 @@ OPEN ACTION ITEMS
 
 Review complete: ☐ Yes | Date: _________________ | Learnings filed: ☐ Yes`
   },
+  {
+    id: 'handoff_sop_final', name: 'Handoff & SOPs Complete (Final Step)', required: true,
+    finalStep: true,
+    desc: 'Final step — confirm all SOPs are written, the new owner is identified, and signoff is captured on the Handoff & SOPs tab.',
+    example: `HANDOFF & SOPs — Final Step
+
+Before checking this box, confirm on the Handoff & SOPs tab:
+✓ New owner / team identified
+✓ Owner contact info captured
+✓ SOPs written for: post-launch question flow, churn / off-boarding, escalation path
+✓ Knowledge transfer meeting held
+✓ Signoff captured (incoming owner + outgoing lead)
+
+Click "→ Open Handoff & SOPs Tab" below to finish the handoff, then return here and check this box to close the project.`,
+    template: ''
+  },
 ];
 
 let project = {
@@ -3109,6 +3156,19 @@ function ensureDefaultTasks() {
     if (typeof renderMilestones === 'function') renderMilestones();
     triggerAutoSave();
   }
+  // Backfill the final "Handoff & SOPs" step into existing project checklists
+  ensureFinalHandoffStep();
+}
+
+function ensureFinalHandoffStep() {
+  if (!hasProject || !project.launchChecklist) return;
+  const exists = project.launchChecklist.some(i => i.id === 'handoff_sop_final');
+  if (exists) return;
+  const tmpl = LAUNCH_CHECKLIST_TEMPLATE.find(i => i.id === 'handoff_sop_final');
+  if (!tmpl) return;
+  project.launchChecklist.push({ ...tmpl, checked: false, notes: '' });
+  if (typeof renderLaunchChecklist === 'function') renderLaunchChecklist();
+  triggerAutoSave();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3152,6 +3212,24 @@ function updateWizardUI() {
 function toggleWExternal() {
   document.getElementById('wExternalDetail').style.display =
     document.getElementById('wExternal').checked ? 'block' : 'none';
+}
+
+function toggleWSlack() {
+  const checked = document.getElementById('wCreateSlack').checked;
+  const detail = document.getElementById('wSlackDetail');
+  detail.style.display = checked ? 'block' : 'none';
+  if (checked) {
+    const input = document.getElementById('wSlackChannel');
+    // Default channel name from project name (only if input is empty)
+    if (!input.value) {
+      const pname = (document.getElementById('wProjectName').value || '').trim();
+      if (pname) {
+        const slug = pname.toLowerCase().replace(/[^a-z0-9_-]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0, 70);
+        input.value = 'proj-' + slug;
+      }
+    }
+    input.focus();
+  }
 }
 
 function createProject() {
@@ -3251,11 +3329,82 @@ function createProject() {
   // Assign a local project ID for multi-project storage
   currentProjectId = genLocalProjectId();
   closeModal('newProjectModal');
-  switchTab('dashboard');
+  // Jump straight into the Launch Checklist — that's where the work starts
+  switchTab('launch');
   // Assign a Firebase project ID if live sync is already connected
   if (fbConnected) setFbProjectId(currentProjectId);
   doAutoSave();
-  showToast('Project "' + project.name + '" created — auto-save on!');
+  showToast('Project "' + project.name + '" created — start with the Launch Checklist ↓');
+
+  // ── If user checked "Create Slack channel", fire it off (async, non-blocking) ──
+  const slackToggle = document.getElementById('wCreateSlack');
+  if (slackToggle && slackToggle.checked) {
+    const channelName = (document.getElementById('wSlackChannel').value || '').trim();
+    const isPrivate = document.getElementById('wSlackPrivate').checked;
+    if (channelName) {
+      createSlackChannelForProject(channelName, isPrivate);
+    } else {
+      showToast('Slack channel skipped — no channel name entered.', 'warn');
+    }
+  }
+}
+
+async function createSlackChannelForProject(channelName, isPrivate) {
+  // Collect emails from included stakeholders only
+  const pocEmails = Object.values(project.stakeholders || {})
+    .filter(s => s && s.included && s.contactEmail)
+    .map(s => s.contactEmail.trim())
+    .filter(Boolean);
+
+  showToast('💬 Creating Slack channel #' + channelName + '…');
+
+  try {
+    const res = await fetch(AI_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create-slack-channel',
+        payload: {
+          channelName,
+          isPrivate,
+          pocEmails,
+          projectName: project.name,
+          projectUrl: (typeof fbProjectId !== 'undefined' && fbProjectId)
+            ? `https://moxie-ops-project-plans.vercel.app/#${fbProjectId}`
+            : '',
+        },
+        project: { name: project.name },
+        settings: project.aiSettings || {},
+      }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || out.error) {
+      throw new Error(out.error || ('HTTP ' + res.status));
+    }
+    // Persist the new channel as the project's Slack channel for future actions
+    if (!project.aiSettings) project.aiSettings = {};
+    project.aiSettings.slackChannel = '#' + (out.channelName || channelName);
+
+    // Add a link to the project so it's visible everywhere
+    project.links = project.links || [];
+    if (out.channelUrl && !project.links.some(l => l.url === out.channelUrl)) {
+      project.links.push({
+        id: Date.now(),
+        title: 'Slack — #' + (out.channelName || channelName),
+        url: out.channelUrl,
+        category: 'Slack',
+      });
+      if (typeof renderLinks === 'function') renderLinks();
+    }
+    doAutoSave();
+
+    const invited = out.invitedCount || 0;
+    const failed  = out.failedInvites && out.failedInvites.length ? ` · ${out.failedInvites.length} POC(s) not found in Slack` : '';
+    showToast(`✓ Channel #${out.channelName || channelName} created · ${invited} POC(s) invited${failed}`);
+  } catch (e) {
+    console.error('Slack channel create failed:', e);
+    showToast('Slack channel create failed: ' + e.message, 'error');
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -4543,13 +4692,31 @@ function renderPlanView() {
 }
 
 function clearPlanFilters() {
-  ['planFilterDueFrom','planFilterDueTo','planFilterStatus'].forEach(id => {
+  ['planFilterDueFrom','planFilterDueTo','planFilterStatus','planFilterOwner'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   ['planFilterMissingDue','planFilterPastDue'].forEach(id => {
     const el = document.getElementById(id); if (el) el.checked = false;
   });
   renderMilestones();
+}
+
+// Populate the Plan-tab Owner filter dropdown with unique owners across tasks + AIs.
+function refreshOwnerFilterOptions() {
+  const sel = document.getElementById('planFilterOwner');
+  if (!sel) return;
+  const prev = sel.value;
+  const owners = new Set();
+  (project.tasks || []).forEach(t => { if (t.owner) owners.add(t.owner.trim()); });
+  (project.actionItems || []).forEach(a => { if (a.owner) owners.add(a.owner.trim()); });
+  // Also include all stakeholder teams that are marked included (so user can pre-filter)
+  STAKEHOLDER_LIST.forEach(s => {
+    const inc = project.stakeholders?.[s.key]?.included;
+    if (inc) owners.add(s.label);
+  });
+  const sorted = [...owners].filter(Boolean).sort((a,b) => a.localeCompare(b));
+  sel.innerHTML = '<option value="">All owners</option>' +
+    sorted.map(o => `<option value="${escHtml(o)}" ${prev===o?'selected':''}>${escHtml(o)}</option>`).join('');
 }
 
 function renderMilestones() {
@@ -4562,6 +4729,8 @@ function renderMilestones() {
 
   // Keep the owner autocomplete fresh — pulls latest stakeholder teams + people
   if (typeof refreshOwnerDatalist === 'function') refreshOwnerDatalist();
+  // Refresh the Owner filter dropdown (covers new tasks/AIs/stakeholders)
+  refreshOwnerFilterOptions();
 
   const ms      = (project.milestones || []);
   const today   = new Date(); today.setHours(0,0,0,0);
@@ -4573,7 +4742,8 @@ function renderMilestones() {
   const fMissingDue = document.getElementById('planFilterMissingDue')?.checked || false;
   const fPastDue    = document.getElementById('planFilterPastDue')?.checked || false;
   const fStatus     = document.getElementById('planFilterStatus')?.value || '';
-  const filterActive = fDueFrom || fDueTo || fMissingDue || fPastDue || fStatus;
+  const fOwner      = document.getElementById('planFilterOwner')?.value || '';
+  const filterActive = fDueFrom || fDueTo || fMissingDue || fPastDue || fStatus || fOwner;
 
   function applyFilters(items, isAi) {
     if (!filterActive) return items;
@@ -4591,6 +4761,12 @@ function renderMilestones() {
       if (fDueFrom && !due) return false; // can't be in range if no date
       if (fDueTo && !due) return false;
       if (fStatus && item.status !== fStatus) return false;
+      if (fOwner) {
+        const owner = (item.owner || '').trim();
+        // Match if any owner token (split on / or , or &) equals the filter
+        const parts = owner.split(/[\/,&]+/).map(p => p.trim().toLowerCase());
+        if (!parts.includes(fOwner.toLowerCase())) return false;
+      }
       return true;
     });
   }
@@ -5024,7 +5200,15 @@ function addActionItem() {
 
 function updateAiField(id, field, value) {
   const ai=(project.actionItems||[]).find(x=>x.id===id);
-  if(ai) ai[field]=value;
+  if(ai) {
+    ai[field]=value;
+    ai.updatedAt = new Date().toISOString();
+    // Stamp completedAt when transitioning to Done (for digest "last 7d" filter)
+    if (field === 'status') {
+      if (value === 'Done' && !ai.completedAt) ai.completedAt = new Date().toISOString();
+      if (value !== 'Done') ai.completedAt = null;
+    }
+  }
   // Re-render so past-due badges + priority color updates
   if (field === 'dueDate' || field === 'priority' || field === 'status') {
     if (typeof renderMilestones === 'function') renderMilestones();
@@ -5265,7 +5449,15 @@ function editTaskField(id, field, cell) {
 
 function updateTaskField(id, field, value) {
   const task = project.tasks.find(t => t.id === id);
-  if (task) { task[field] = value; }
+  if (task) {
+    task[field] = value;
+    task.updatedAt = new Date().toISOString();
+    // Stamp completedAt when transitioning to Done (for digest "last 7d" filter)
+    if (field === 'status') {
+      if (value === 'Done' && !task.completedAt) task.completedAt = new Date().toISOString();
+      if (value !== 'Done') task.completedAt = null;
+    }
+  }
   if (field === 'status' && value === 'At Risk') { if (!task.flaggedRisk) {} }
   // Re-render the Plan view so past-due / "Xd overdue" badges recompute
   // when dueDate or status changes. Skip for owner/notes to keep cursor in place.
@@ -5359,6 +5551,7 @@ function renderLaunchChecklist() {
           ${!isNA && item.example ? `<button class="cl-template-btn" onclick="toggleClPanel('${item.id}','example')">💡 See Example</button>` : ''}
           ${!isNA && item.template ? `<button class="cl-template-btn" onclick="toggleClPanel('${item.id}','tmpl')">📋 Copy Template</button>` : ''}
           ${!isNA ? `<button class="cl-template-btn" onclick="toggleClPanel('${item.id}','notes')" style="border-color:var(--teal);color:var(--teal);">📝 Notes${item.notes ? ' ✓' : ''}</button>` : ''}
+          ${!isNA && item.finalStep ? `<button class="cl-template-btn" onclick="switchTab('handoff')" style="background:var(--purple);color:#fff;border-color:var(--purple);font-weight:700;">→ Open Handoff &amp; SOPs Tab</button>` : ''}
           <button class="cl-template-btn" onclick="toggleChecklistNA('${item.id}')"
             style="${isNA ? 'background:var(--purple);color:#fff;border-color:var(--purple);' : 'border-color:#94A3B8;color:#64748B;'}">
             ${isNA ? '↩ Undo N/A' : 'Does Not Apply'}
@@ -5456,6 +5649,11 @@ function toggleChecklist(id, checked) {
   if (item) { item.checked = checked; }
   renderLaunchChecklist();
   updateDashboard();
+  // Final handoff step → jump to Handoff & SOPs tab when checked
+  if (item && item.finalStep && checked) {
+    showToast('✓ Final step — opening Handoff & SOPs…');
+    setTimeout(() => switchTab('handoff'), 400);
+  }
 }
 
 function toggleChecklistNA(id) {
@@ -5943,24 +6141,64 @@ function inferTeams(ownerStr) {
   if (!s) return ['Unassigned'];
   const lower = s.toLowerCase();
 
-  // 1) Match by stakeholder contact name (exact, case-insensitive, last-name OR first-name)
+  // 1) Exact team label match (the dropdown sets this exactly — most common path)
+  const exact = STAKEHOLDER_LIST.find(t => t.label.toLowerCase() === lower);
+  if (exact) return [exact.label];
+
+  // 2) Match by stakeholder contact name (exact, case-insensitive, full / first / last name)
   const ownerMap = buildOwnerTeamMap();
   if (ownerMap[lower]) return ownerMap[lower];
-  // Also try first-name match (e.g., "Jennifer" matches "Jennifer Denton")
   for (const fullName in ownerMap) {
     const parts = fullName.split(/\s+/);
     if (parts[0] === lower || parts[parts.length - 1] === lower) return ownerMap[fullName];
   }
 
-  // 2) Match by team label as the owner (e.g., owner field literally says "PSM" or "Sales")
+  // 3) Fuzzy label match — owner contains the team label as a word
+  // (e.g., "Marketing Manager" → Marketing; "Senior Sales Lead" → Sales)
   for (const team of STAKEHOLDER_LIST) {
     const labelLower = team.label.toLowerCase();
-    if (lower === labelLower || lower.includes(labelLower) || labelLower.includes(lower.split(/\s+/)[0])) {
-      return [team.label];
-    }
+    // Word-boundary match so "md" doesn't match "amazon"
+    const re = new RegExp('\\b' + labelLower.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '\\b');
+    if (re.test(lower)) return [team.label];
   }
 
-  // 3) No match → Other
+  // 4) Common aliases / synonyms
+  const aliasMap = {
+    'ops':           'Ops Leader',
+    'operations':    'Ops Leader',
+    'cs':            'Onboarding',
+    'customer success':'Onboarding',
+    'psms':          'PSM',
+    'comms':         'Internal Comms',
+    'communications':'Internal Comms',
+    'finance':       'Billing',
+    'leadership':    'Senior Leadership Owner',
+    'exec':          'Senior Leadership Owner',
+    'execs':         'Senior Leadership Owner',
+    'leadership team':'Senior Leadership Owner',
+    'vendor':        'External',
+    'partner':       'External',
+    'engineering':   'Product',
+    'engineer':      'Product',
+    'dev':           'Product',
+    'devs':          'Product',
+    'tech':          'Product',
+    'eng':           'Product',
+    'doctor':        'MD',
+    'physician':     'MD',
+    'inventory':     'Supplies',
+    'procurement':   'Supplies',
+    'rev':           'Rev Ops',
+    'revenue ops':   'Rev Ops',
+    'biz':           'Biz Ops',
+    'business ops':  'Biz Ops',
+  };
+  for (const alias in aliasMap) {
+    const re = new RegExp('\\b' + alias.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '\\b');
+    if (re.test(lower)) return [aliasMap[alias]];
+  }
+
+  // 5) No match → Other
   return ['Other'];
 }
 function inferTeam(ownerStr) { return inferTeams(ownerStr)[0]; } // back-compat single-team
@@ -6416,16 +6654,15 @@ function setDigestStatus(kind, msg, color) {
 
 async function sendDigestEmail(kind) {
   if (!hasProject) { showToast('Open a project first.', 'error'); return; }
-  const content = getDigestContent(kind);
-  if (!content || content.trim().length < 20) {
+  const data = window['_digestData_' + kind];
+  if (!data) {
     showToast('Generate the digest first.', 'error');
     setDigestStatus(kind, '⚠ Click "Generate" above first.', 'var(--orange)');
     return;
   }
   setDigestStatus(kind, '⏳ Sending email...', 'var(--text-secondary)');
   try {
-    // Convert plain text to simple HTML (preserve line breaks)
-    const html = `<pre style="font-family:-apple-system,Segoe UI,sans-serif;font-size:13px;line-height:1.6;color:#1A1A2E;white-space:pre-wrap;">${content.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;
+    const html = renderDigestHtml(data, kind);
     const r = await aiCallApi('quick-send', {
       channel: 'email',
       subject: getDigestSubject(kind),
@@ -6441,20 +6678,20 @@ async function sendDigestEmail(kind) {
 
 async function sendDigestSlack(kind) {
   if (!hasProject) { showToast('Open a project first.', 'error'); return; }
-  const content = getDigestContent(kind);
-  if (!content || content.trim().length < 20) {
+  const data = window['_digestData_' + kind];
+  if (!data) {
     showToast('Generate the digest first.', 'error');
     setDigestStatus(kind, '⚠ Click "Generate" above first.', 'var(--orange)');
     return;
   }
   setDigestStatus(kind, '⏳ Posting to Slack...', 'var(--text-secondary)');
   try {
-    // Slack truncates at 40k chars; trim if needed and use simple mrkdwn
-    const trimmed = content.length > 35000 ? content.slice(0, 35000) + '\n…(truncated)' : content;
+    const body = renderDigestSlack(data, kind);
+    const trimmed = body.length > 35000 ? body.slice(0, 35000) + '\n…(truncated)' : body;
     const r = await aiCallApi('quick-send', {
       channel: 'slack',
       subject: '',
-      body: '*' + getDigestSubject(kind) + '*\n```\n' + trimmed + '\n```',
+      body: trimmed,
       polish: false,
     });
     setDigestStatus(kind, '✓ Posted to Slack.', 'var(--green)');
@@ -6478,155 +6715,284 @@ function copyDigest(kind) {
   });
 }
 
-function generateBrief() {
-  const date = document.getElementById('briefDate').value;
-  const recipients = document.getElementById('briefRecipients').value;
-  const focus = document.getElementById('briefFocus').value;
-  const dateStr = date ? new Date(date + 'T00:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) : 'N/A';
+// ═══════════════════════════════════════════════════════
+// DIGESTS — clean 3-section layout (Completed / Upcoming / Risks)
+// ═══════════════════════════════════════════════════════
 
-  const openRisks = project.risks.filter(r => r.status === 'Open' || r.status === 'Monitoring');
-  const blocked = project.tasks.filter(t => t.status === 'Blocked');
-  const atRisk = project.tasks.filter(t => t.status === 'At Risk');
-  const inProgress = project.tasks.filter(t => t.status === 'In Progress');
-  const launchDone = project.launchChecklist.filter(i => i.checked).length;
+// Build the structured digest data — single source of truth.
+// kind: 'brief' | 'weekly' | 'daily'
+function buildDigestData(kind) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayMs = today.getTime();
 
-  const brief = `MEETING BRIEF — ${project.name || 'Project'}
-Date: ${dateStr}
-Prepared for: ${recipients || 'All Stakeholders'}
-Project Lead: ${project.lead || 'N/A'}
-Project Due Date: ${project.dueDate ? new Date(project.dueDate + 'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : 'TBD'}
-${'═'.repeat(60)}
+  // Look-back window for completed: brief = 7d, weekly = 7d, daily = 1d
+  const lookbackDays = kind === 'daily' ? 1 : 7;
+  // Look-ahead window for upcoming: brief = 7d, weekly = 7d, daily = 3d
+  const lookaheadDays = kind === 'daily' ? 3 : 7;
 
-PROJECT STATUS AT A GLANCE
-• Total Tasks: ${project.tasks.length} | Completed: ${project.tasks.filter(t=>t.status==='Done').length} | In Progress: ${inProgress.length}
-• Blocked: ${blocked.length} | At Risk: ${atRisk.length}
-• Launch Checklist: ${launchDone}/${project.launchChecklist.length} complete
+  const lookbackCutoff = todayMs - lookbackDays * 86400000;
+  const lookaheadCutoff = todayMs + lookaheadDays * 86400000;
 
-${'─'.repeat(60)}
+  // — Completed: tasks/AIs marked Done with completedAt or updatedAt in lookback window —
+  // We don't track completedAt for legacy items; fall back to "all Done" if no timestamp on any of them
+  function completedInWindow(items, labelField) {
+    const inWin = items.filter(i => {
+      if (i.status !== 'Done') return false;
+      const ts = i.completedAt || i.updatedAt || null;
+      if (!ts) return true; // include legacy Done items so the section isn't empty
+      const t = new Date(ts).getTime();
+      return t >= lookbackCutoff && t <= todayMs + 86400000;
+    });
+    return inWin;
+  }
+  const completedTasks = completedInWindow(project.tasks || [], 'task');
+  const completedAIs   = completedInWindow(project.actionItems || [], 'item');
 
-${focus ? 'FOCUS AREA: ' + focus.toUpperCase() + '\n' + '─'.repeat(60) + '\n' : ''}
-OPEN RISKS (${openRisks.length})
-${openRisks.length > 0
-  ? openRisks.map(r => `• [${r.impact}] ${r.risk || 'Unnamed risk'} — Owner: ${r.owner || 'TBD'} | Mitigation: ${r.mitigation || 'TBD'}`).join('\n')
-  : '• No open risks at this time.'}
+  // — Upcoming: due in [today, today+window], not Done —
+  function upcomingInWindow(items) {
+    return items.filter(i => {
+      if (i.status === 'Done') return false;
+      if (!i.dueDate) return false;
+      const t = new Date(i.dueDate + 'T00:00:00').getTime();
+      return t >= todayMs && t <= lookaheadCutoff;
+    }).sort((a,b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+  }
+  const upcomingTasks = upcomingInWindow(project.tasks || []);
+  const upcomingAIs   = upcomingInWindow(project.actionItems || []);
 
-${'─'.repeat(60)}
+  // — Past due (always show, separate from upcoming so it screams) —
+  function pastDueInWindow(items) {
+    return items.filter(i => {
+      if (i.status === 'Done') return false;
+      if (!i.dueDate) return false;
+      return new Date(i.dueDate + 'T00:00:00').getTime() < todayMs;
+    }).sort((a,b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+  }
+  const pastDueTasks = pastDueInWindow(project.tasks || []);
+  const pastDueAIs   = pastDueInWindow(project.actionItems || []);
 
-BLOCKERS (${blocked.length})
-${blocked.length > 0
-  ? blocked.map(t => `• ${t.task} — Owner: ${t.owner || 'TBD'} | Notes: ${t.notes || 'None'}`).join('\n')
-  : '• No blockers at this time.'}
+  // — Risks: open risks + Blocked/At Risk tasks —
+  const openRisks = (project.risks || []).filter(r => r.status === 'Open' || r.status === 'Monitoring' || !r.status);
+  const blockedTasks = (project.tasks || []).filter(t => t.status === 'Blocked' || t.status === 'At Risk' || t.flaggedRisk);
 
-${'─'.repeat(60)}
+  // — Project meta —
+  const rag = (project.ragStatus && project.ragStatus.status) || 'Green';
+  const ragEmoji = rag === 'Red' ? '🔴' : rag === 'Amber' ? '🟡' : '🟢';
+  const ragReason = (project.ragStatus && project.ragStatus.reason) || '';
+  const launchTotal = (project.launchChecklist || []).length;
+  const launchDone  = (project.launchChecklist || []).filter(i => i.checked).length;
+  const launchPct   = launchTotal ? Math.round((launchDone / launchTotal) * 100) : 0;
 
-IN-PROGRESS ITEMS
-${inProgress.length > 0
-  ? inProgress.slice(0,8).map(t => `• ${t.task} — Owner: ${t.owner || 'TBD'}${t.dueDate ? ' | Due: ' + new Date(t.dueDate + 'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : ''}`).join('\n')
-  : '• No items currently in progress.'}
+  // — Project URL for "View tracker" link —
+  const projectUrl = (typeof fbProjectId !== 'undefined' && fbProjectId)
+    ? `https://moxie-ops-project-plans.vercel.app/#${fbProjectId}`
+    : '';
 
-${'─'.repeat(60)}
+  return {
+    kind,
+    projectName: project.name || 'Project',
+    projectLead: project.lead || 'TBD',
+    projectDue:  project.dueDate
+      ? new Date(project.dueDate + 'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+      : 'TBD',
+    projectUrl,
+    rag, ragEmoji, ragReason,
+    launchDone, launchTotal, launchPct,
+    completedTasks, completedAIs,
+    upcomingTasks, upcomingAIs,
+    pastDueTasks, pastDueAIs,
+    openRisks, blockedTasks,
+    lookbackDays, lookaheadDays,
+    dateLabel: new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}),
+  };
+}
 
-SUGGESTED AGENDA
-1. Risk review & blocker resolution (${openRisks.length + blocked.length} items)
-2. Status update on in-progress deliverables
-3. Launch checklist review (${launchDone}/${project.launchChecklist.length} complete)
-4. Action items & next steps`;
+// Render digest for on-screen preview (and clipboard) — plain text
+function renderDigestText(d, kind) {
+  const fmtDate = ds => ds ? new Date(ds + 'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—';
+  const head = kind === 'brief' ? 'MEETING BRIEF' : kind === 'weekly' ? 'WEEKLY DIGEST' : 'DAILY DIGEST';
 
-  const el = document.getElementById('briefResult');
-  el.textContent = brief;
+  const completedList = [...d.completedTasks.map(t => '✓ ' + (t.task || '—') + ' (' + (t.owner || 'TBD') + ')'),
+                         ...d.completedAIs.map(a => '✓ ' + (a.item || '—') + ' (' + (a.owner || 'TBD') + ')')];
+  const upcomingList  = [...d.upcomingTasks.map(t => '• ' + (t.task || '—') + ' — ' + (t.owner || 'TBD') + ' · due ' + fmtDate(t.dueDate)),
+                         ...d.upcomingAIs.map(a => '• ' + (a.item || '—') + ' — ' + (a.owner || 'TBD') + ' · due ' + fmtDate(a.dueDate))];
+  const pastDueList   = [...d.pastDueTasks.map(t => '🔴 ' + (t.task || '—') + ' — ' + (t.owner || 'TBD') + ' · was ' + fmtDate(t.dueDate)),
+                         ...d.pastDueAIs.map(a => '🔴 ' + (a.item || '—') + ' — ' + (a.owner || 'TBD') + ' · was ' + fmtDate(a.dueDate))];
+  const risksList     = [
+    ...d.openRisks.map(r => '⚠️ [' + (r.impact || 'Med') + '] ' + (r.risk || 'Unnamed risk') + ' — ' + (r.owner || 'TBD') + (r.mitigation ? ' · Mitigation: ' + r.mitigation : '')),
+    ...d.blockedTasks.map(t => '🚩 [' + (t.status || 'At Risk') + '] ' + (t.task || '—') + ' — ' + (t.owner || 'TBD')),
+  ];
+
+  const lines = [
+    `${head} — ${d.projectName}`,
+    `${d.dateLabel}`,
+    `Health: ${d.ragEmoji} ${d.rag}${d.ragReason ? ' — ' + d.ragReason : ''} · Lead: ${d.projectLead} · Target Launch: ${d.projectDue}`,
+    `Launch Checklist: ${d.launchDone}/${d.launchTotal} (${d.launchPct}%)`,
+    '═'.repeat(60),
+    '',
+    `✅ COMPLETED (last ${d.lookbackDays}d) — ${completedList.length}`,
+    completedList.length ? completedList.join('\n') : '• Nothing completed in the window.',
+    '',
+    `📅 UPCOMING (next ${d.lookaheadDays}d) — ${upcomingList.length}`,
+    upcomingList.length ? upcomingList.join('\n') : '• Nothing due in the next ' + d.lookaheadDays + ' days.',
+  ];
+  if (pastDueList.length) {
+    lines.push('', `❗ PAST DUE — ${pastDueList.length}`, pastDueList.join('\n'));
+  }
+  lines.push('', `⚠️ RISKS & BLOCKERS — ${risksList.length}`, risksList.length ? risksList.join('\n') : '• No open risks or blockers.');
+  if (d.projectUrl) lines.push('', `Live tracker: ${d.projectUrl}`);
+  return lines.join('\n');
+}
+
+// Render digest as Slack mrkdwn (uses *bold*, • bullets, no triple-backtick code block)
+function renderDigestSlack(d, kind) {
+  const fmtDate = ds => ds ? new Date(ds + 'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—';
+  const head = kind === 'brief' ? ':clipboard: *Meeting Brief*' : kind === 'weekly' ? ':calendar: *Weekly Digest*' : ':sunny: *Daily Digest*';
+
+  function fmtItems(arr, isAi) {
+    return arr.map(i => {
+      const name = isAi ? (i.item || '—') : (i.task || '—');
+      const owner = i.owner ? ` _·_ ${i.owner}` : '';
+      const due = i.dueDate ? ` _·_ due ${fmtDate(i.dueDate)}` : '';
+      return `• ${name}${owner}${due}`;
+    }).join('\n');
+  }
+  function fmtRisks(arr) {
+    return arr.map(r => `• [*${r.impact || 'Med'}*] ${r.risk || 'Unnamed risk'} _·_ ${r.owner || 'TBD'}${r.mitigation ? ` _·_ Mitigation: ${r.mitigation}` : ''}`).join('\n');
+  }
+  function fmtBlocked(arr) {
+    return arr.map(t => `• [*${t.status || 'At Risk'}*] ${t.task || '—'} _·_ ${t.owner || 'TBD'}`).join('\n');
+  }
+
+  const completed = [...d.completedTasks, ...d.completedAIs.map(a => ({ ...a, task: a.item }))];
+  const upcoming  = [...d.upcomingTasks, ...d.upcomingAIs.map(a => ({ ...a, task: a.item }))];
+  const pastDue   = [...d.pastDueTasks, ...d.pastDueAIs.map(a => ({ ...a, task: a.item }))];
+
+  const parts = [
+    `${head} — *${d.projectName}*`,
+    `${d.ragEmoji} *Health:* ${d.rag}${d.ragReason ? ` _·_ ${d.ragReason}` : ''}    :dart: *Lead:* ${d.projectLead}    :calendar: *Target:* ${d.projectDue}`,
+    `:white_check_mark: *Launch Checklist:* ${d.launchDone}/${d.launchTotal} (${d.launchPct}%)`,
+    '',
+    `:white_check_mark: *Completed (last ${d.lookbackDays}d)* — ${completed.length}`,
+    completed.length ? fmtItems(completed, false) : '_Nothing completed in the window._',
+    '',
+    `:date: *Upcoming (next ${d.lookaheadDays}d)* — ${upcoming.length}`,
+    upcoming.length ? fmtItems(upcoming, false) : `_Nothing due in the next ${d.lookaheadDays} days._`,
+  ];
+  if (pastDue.length) {
+    parts.push('', `:exclamation: *Past Due* — ${pastDue.length}`, fmtItems(pastDue, false));
+  }
+  const risksCombined = (d.openRisks.length || d.blockedTasks.length) ? [fmtRisks(d.openRisks), fmtBlocked(d.blockedTasks)].filter(Boolean).join('\n') : '_No open risks or blockers._';
+  parts.push('', `:warning: *Risks & Blockers* — ${d.openRisks.length + d.blockedTasks.length}`, risksCombined);
+
+  if (d.projectUrl) parts.push('', `:link: <${d.projectUrl}|Open live tracker>`);
+  return parts.join('\n');
+}
+
+// Render digest as HTML email (clean, scannable, with tables)
+function renderDigestHtml(d, kind) {
+  const fmtDate = ds => ds ? new Date(ds + 'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—';
+  const head = kind === 'brief' ? '📋 Meeting Brief' : kind === 'weekly' ? '📅 Weekly Digest' : '☀️ Daily Digest';
+  const ragBg = d.rag === 'Red' ? '#FEE2E2' : d.rag === 'Amber' ? '#FEF3C7' : '#D1FAE5';
+  const ragFg = d.rag === 'Red' ? '#991B1B' : d.rag === 'Amber' ? '#92400E' : '#065F46';
+
+  const esc = s => String(s || '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+  function itemRows(items, isAi) {
+    if (!items.length) return `<tr><td colspan="3" style="padding:8px;color:#94A3B8;font-style:italic;">— None —</td></tr>`;
+    return items.map(i => {
+      const name = isAi ? (i.item || '—') : (i.task || '—');
+      return `<tr style="border-top:1px solid #E2E8F0;">
+        <td style="padding:8px 10px;font-size:13px;">${esc(name)}</td>
+        <td style="padding:8px 10px;font-size:13px;color:#475569;white-space:nowrap;">${esc(i.owner || 'TBD')}</td>
+        <td style="padding:8px 10px;font-size:13px;color:#475569;white-space:nowrap;">${fmtDate(i.dueDate)}</td>
+      </tr>`;
+    }).join('');
+  }
+  function riskRows(risks, blocks) {
+    if (!risks.length && !blocks.length) return `<tr><td colspan="3" style="padding:8px;color:#94A3B8;font-style:italic;">— No open risks or blockers —</td></tr>`;
+    return [
+      ...risks.map(r => `<tr style="border-top:1px solid #E2E8F0;">
+        <td style="padding:8px 10px;font-size:13px;">⚠️ <strong>[${esc(r.impact || 'Med')}]</strong> ${esc(r.risk || 'Unnamed')}<div style="color:#64748B;font-size:12px;margin-top:2px;">${esc(r.mitigation || '')}</div></td>
+        <td style="padding:8px 10px;font-size:13px;color:#475569;white-space:nowrap;">${esc(r.owner || 'TBD')}</td>
+        <td style="padding:8px 10px;font-size:13px;color:#991B1B;font-weight:600;white-space:nowrap;">Risk</td>
+      </tr>`),
+      ...blocks.map(t => `<tr style="border-top:1px solid #E2E8F0;">
+        <td style="padding:8px 10px;font-size:13px;">🚩 ${esc(t.task || '—')}</td>
+        <td style="padding:8px 10px;font-size:13px;color:#475569;white-space:nowrap;">${esc(t.owner || 'TBD')}</td>
+        <td style="padding:8px 10px;font-size:13px;color:#92400E;font-weight:600;white-space:nowrap;">${esc(t.status || 'At Risk')}</td>
+      </tr>`),
+    ].join('');
+  }
+
+  const completed = [...d.completedTasks, ...d.completedAIs.map(a => ({ ...a, task: a.item }))];
+  const upcoming  = [...d.upcomingTasks,  ...d.upcomingAIs.map(a => ({ ...a, task: a.item }))];
+  const pastDue   = [...d.pastDueTasks,   ...d.pastDueAIs.map(a => ({ ...a, task: a.item }))];
+
+  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:680px;margin:0 auto;color:#1F2937;">
+
+  <div style="background:#1F1A47;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0;">
+    <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;opacity:.8;">${esc(head)}</div>
+    <div style="font-size:24px;font-weight:800;margin-top:4px;">${esc(d.projectName)}</div>
+    <div style="font-size:13px;opacity:.85;margin-top:6px;">${esc(d.dateLabel)}</div>
+  </div>
+
+  <div style="background:#F8FAFC;padding:14px 24px;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;display:flex;flex-wrap:wrap;gap:14px;font-size:13px;">
+    <span style="background:${ragBg};color:${ragFg};font-weight:700;padding:4px 10px;border-radius:12px;font-size:12px;">${d.ragEmoji} ${esc(d.rag)}</span>
+    <span><strong>Lead:</strong> ${esc(d.projectLead)}</span>
+    <span><strong>Target Launch:</strong> ${esc(d.projectDue)}</span>
+    <span><strong>Launch Checklist:</strong> ${d.launchDone}/${d.launchTotal} (${d.launchPct}%)</span>
+  </div>
+  ${d.ragReason ? `<div style="background:#F8FAFC;padding:0 24px 12px 24px;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;font-size:12px;color:#64748B;">${esc(d.ragReason)}</div>` : ''}
+
+  <div style="border:1px solid #E2E8F0;border-top:none;background:#fff;">
+
+    <h2 style="font-size:14px;font-weight:700;color:#065F46;background:#D1FAE5;margin:0;padding:10px 24px;border-bottom:1px solid #E2E8F0;">✅ Completed (last ${d.lookbackDays}d) — ${completed.length}</h2>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr style="background:#F8FAFC;"><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;font-weight:700;">Item</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;font-weight:700;">Owner</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;font-weight:700;">Due</th></tr></thead>
+      <tbody>${itemRows(completed, false)}</tbody>
+    </table>
+
+    <h2 style="font-size:14px;font-weight:700;color:#1E3A8A;background:#DBEAFE;margin:0;padding:10px 24px;border-top:1px solid #E2E8F0;border-bottom:1px solid #E2E8F0;">📅 Upcoming (next ${d.lookaheadDays}d) — ${upcoming.length}</h2>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr style="background:#F8FAFC;"><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;font-weight:700;">Item</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;font-weight:700;">Owner</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;font-weight:700;">Due</th></tr></thead>
+      <tbody>${itemRows(upcoming, false)}</tbody>
+    </table>
+
+    ${pastDue.length ? `
+    <h2 style="font-size:14px;font-weight:700;color:#991B1B;background:#FEE2E2;margin:0;padding:10px 24px;border-top:1px solid #E2E8F0;border-bottom:1px solid #E2E8F0;">❗ Past Due — ${pastDue.length}</h2>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr style="background:#F8FAFC;"><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;font-weight:700;">Item</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;font-weight:700;">Owner</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;font-weight:700;">Was Due</th></tr></thead>
+      <tbody>${itemRows(pastDue, false)}</tbody>
+    </table>` : ''}
+
+    <h2 style="font-size:14px;font-weight:700;color:#92400E;background:#FEF3C7;margin:0;padding:10px 24px;border-top:1px solid #E2E8F0;border-bottom:1px solid #E2E8F0;">⚠️ Risks & Blockers — ${d.openRisks.length + d.blockedTasks.length}</h2>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr style="background:#F8FAFC;"><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;font-weight:700;">Risk / Blocker</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;font-weight:700;">Owner</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;font-weight:700;">Type</th></tr></thead>
+      <tbody>${riskRows(d.openRisks, d.blockedTasks)}</tbody>
+    </table>
+
+  </div>
+
+  ${d.projectUrl ? `<div style="background:#1F1A47;color:#fff;padding:14px 24px;border-radius:0 0 8px 8px;text-align:center;font-size:13px;">
+    <a href="${esc(d.projectUrl)}" style="color:#A78BFA;text-decoration:none;font-weight:700;">→ Open live project tracker</a>
+  </div>` : ''}
+</div>`;
+}
+
+function renderDigestPreview(kind) {
+  const data = buildDigestData(kind);
+  window['_digestData_' + kind] = data; // stash for send/copy
+  const text = renderDigestText(data, kind);
+  const el = document.getElementById(kind + 'Result');
+  el.textContent = text;
   el.style.display = 'block';
   el.onclick = () => { const sel = window.getSelection(); const range = document.createRange(); range.selectNodeContents(el); sel.removeAllRanges(); sel.addRange(range); };
 }
 
-function generateWeekly() {
-  const date = document.getElementById('weeklyDate').value;
-  const recipients = document.getElementById('weeklyRecipients').value;
-  const onTime = document.getElementById('weeklyOnTime').value;
-  const dateStr = date ? new Date(date + 'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : 'N/A';
-
-  const done = project.tasks.filter(t => t.status === 'Done');
-  const inProg = project.tasks.filter(t => t.status === 'In Progress');
-  const upcoming = project.tasks.filter(t => t.status === 'Not Started').slice(0,5);
-  const risks = project.risks.filter(r => r.status === 'Open');
-
-  const digest = `WEEKLY PROJECT DIGEST — Week of ${dateStr}
-Project: ${project.name || 'N/A'}
-Distribution: ${onTime === 'on-time' ? '✅ On Time' : '⚠️ Delayed'} | Recipients: ${recipients || 'Team'}
-${'═'.repeat(60)}
-
-WHAT WE ACCOMPLISHED THIS WEEK
-${done.length > 0 ? done.slice(0,6).map(t => `✓ ${t.task} (${t.owner || 'Owner TBD'})`).join('\n') : '• No tasks marked as done this week.'}
-
-${'─'.repeat(60)}
-
-WHAT'S IN PROGRESS
-${inProg.length > 0 ? inProg.slice(0,6).map(t => `→ ${t.task} — ${t.owner || 'TBD'}${t.dueDate ? ' | Due ' + new Date(t.dueDate + 'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : ''}`).join('\n') : '• No items currently in progress.'}
-
-${'─'.repeat(60)}
-
-PRIORITIES FOR NEXT WEEK
-${upcoming.length > 0 ? upcoming.map(t => `• ${t.task} — ${t.owner || 'TBD'}`).join('\n') : '• Review tasks tab for priorities.'}
-
-${'─'.repeat(60)}
-
-RISKS & FLAGS
-${risks.length > 0 ? risks.map(r => `🚩 [${r.impact}] ${r.risk || 'Risk'} — ${r.owner || 'TBD'}`).join('\n') : '• No open risks.'}
-
-${'─'.repeat(60)}
-
-LAUNCH CHECKLIST: ${project.launchChecklist.filter(i=>i.checked).length}/${project.launchChecklist.length} items complete
-PROJECT DUE DATE: ${project.dueDate ? new Date(project.dueDate + 'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : 'TBD'}`;
-
-  const el = document.getElementById('weeklyResult');
-  el.textContent = digest;
-  el.style.display = 'block';
-  el.onclick = () => { const sel = window.getSelection(); const range = document.createRange(); range.selectNodeContents(el); sel.removeAllRanges(); sel.addRange(range); };
-}
-
-function generateDaily() {
-  const date = document.getElementById('dailyDate').value;
-  const recipients = document.getElementById('dailyRecipients').value;
-  const onTime = document.getElementById('dailyOnTime').value;
-  const dateStr = date ? new Date(date + 'T00:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) : 'N/A';
-
-  const today = new Date(date + 'T00:00:00');
-  const todayTasks = project.tasks.filter(t => t.dueDate === date && t.status !== 'Done');
-  const blocked = project.tasks.filter(t => t.status === 'Blocked');
-  const atRisk = project.tasks.filter(t => t.status === 'At Risk' || t.flaggedRisk);
-  const inProg = project.tasks.filter(t => t.status === 'In Progress');
-
-  const digest = `DAILY DIGEST — ${dateStr}
-Project: ${project.name || 'N/A'}
-Distribution: ${onTime === 'on-time' ? '✅ On Time' : '⚠️ Delayed'} | Recipients: ${recipients || 'Team'}
-${'═'.repeat(60)}
-
-TODAY'S PRIORITIES
-${todayTasks.length > 0
-  ? todayTasks.map(t => `• ${t.task} — ${t.owner || 'TBD'} [${t.status}]`).join('\n')
-  : inProg.length > 0
-    ? inProg.slice(0,5).map(t => `→ ${t.task} — ${t.owner || 'TBD'}`).join('\n')
-    : '• No specific tasks due today — check Tasks tab.'}
-
-${'─'.repeat(60)}
-
-BLOCKERS NEEDING ATTENTION
-${blocked.length > 0 ? blocked.map(t => `🔴 ${t.task} — Owner: ${t.owner || 'TBD'} | ${t.notes || 'No notes'}`).join('\n') : '• No blockers — keep moving!'}
-
-${'─'.repeat(60)}
-
-AT RISK ITEMS
-${atRisk.length > 0 ? atRisk.map(t => `⚠️ ${t.task} — Owner: ${t.owner || 'TBD'}`).join('\n') : '• No items flagged at risk today.'}
-
-${'─'.repeat(60)}
-
-QUICK STATS
-Tasks Done: ${project.tasks.filter(t=>t.status==='Done').length} | In Progress: ${inProg.length} | Remaining: ${project.tasks.filter(t=>t.status==='Not Started').length}`;
-
-  const el = document.getElementById('dailyResult');
-  el.textContent = digest;
-  el.style.display = 'block';
-  el.onclick = () => { const sel = window.getSelection(); const range = document.createRange(); range.selectNodeContents(el); sel.removeAllRanges(); sel.addRange(range); };
-}
+function generateBrief()   { renderDigestPreview('brief');   }
+function generateWeekly()  { renderDigestPreview('weekly');  }
+function generateDaily()   { renderDigestPreview('daily');   }
 
 // ═══════════════════════════════════════════════════════
 // EXPORT / UTILITIES
