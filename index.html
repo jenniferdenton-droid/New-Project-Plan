@@ -809,6 +809,12 @@
         </div>
         <button class="btn btn-primary" style="width:100%;" onclick="generateBrief()">Generate Meeting Brief</button>
         <div class="digest-result" id="briefResult"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn btn-teal btn-sm" style="flex:1;" onclick="sendDigestEmail('brief')">📧 Send Email</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="sendDigestSlack('brief')">💬 Send Slack</button>
+          <button class="btn btn-secondary btn-sm" onclick="copyDigest('brief')">📋 Copy</button>
+        </div>
+        <div id="briefSendResult" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
       </div>
     </div>
     <!-- Weekly Digest -->
@@ -832,6 +838,12 @@
         </div>
         <button class="btn btn-teal" style="width:100%;" onclick="generateWeekly()">Generate Weekly Digest</button>
         <div class="digest-result" id="weeklyResult"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn btn-teal btn-sm" style="flex:1;" onclick="sendDigestEmail('weekly')">📧 Send Email</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="sendDigestSlack('weekly')">💬 Send Slack</button>
+          <button class="btn btn-secondary btn-sm" onclick="copyDigest('weekly')">📋 Copy</button>
+        </div>
+        <div id="weeklySendResult" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
       </div>
     </div>
     <!-- Daily Digest -->
@@ -855,6 +867,12 @@
         </div>
         <button class="btn btn-secondary" style="width:100%;" onclick="generateDaily()">Generate Daily Digest</button>
         <div class="digest-result" id="dailyResult"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn btn-teal btn-sm" style="flex:1;" onclick="sendDigestEmail('daily')">📧 Send Email</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="sendDigestSlack('daily')">💬 Send Slack</button>
+          <button class="btn btn-secondary btn-sm" onclick="copyDigest('daily')">📋 Copy</button>
+        </div>
+        <div id="dailySendResult" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
       </div>
     </div>
     <!-- Copy to Clipboard helper -->
@@ -6282,6 +6300,96 @@ function updateDashboard() {
 // ═══════════════════════════════════════════════════════
 // DIGEST GENERATORS
 // ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// DIGEST → SEND VIA EMAIL / SLACK / CLIPBOARD
+// ═══════════════════════════════════════════════════════
+function getDigestContent(kind) {
+  const el = document.getElementById(kind + 'Result');
+  if (!el) return '';
+  // The digest result is plain text inside a styled box. Get text content.
+  return el.textContent || el.innerText || '';
+}
+
+function getDigestSubject(kind) {
+  const map = {
+    brief:  `Meeting Brief — ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})}`,
+    weekly: `Weekly Digest — ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})}`,
+    daily:  `Daily Digest — ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})}`,
+  };
+  return map[kind] || 'Project Digest';
+}
+
+function setDigestStatus(kind, msg, color) {
+  const el = document.getElementById(kind + 'SendResult');
+  if (!el) return;
+  el.style.color = color || 'var(--text-secondary)';
+  el.textContent = msg;
+}
+
+async function sendDigestEmail(kind) {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const content = getDigestContent(kind);
+  if (!content || content.trim().length < 20) {
+    showToast('Generate the digest first.', 'error');
+    setDigestStatus(kind, '⚠ Click "Generate" above first.', 'var(--orange)');
+    return;
+  }
+  setDigestStatus(kind, '⏳ Sending email...', 'var(--text-secondary)');
+  try {
+    // Convert plain text to simple HTML (preserve line breaks)
+    const html = `<pre style="font-family:-apple-system,Segoe UI,sans-serif;font-size:13px;line-height:1.6;color:#1A1A2E;white-space:pre-wrap;">${content.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;
+    const r = await aiCallApi('quick-send', {
+      channel: 'email',
+      subject: getDigestSubject(kind),
+      body: html,
+      polish: false,
+    });
+    setDigestStatus(kind, '✓ Email sent.', 'var(--green)');
+    showToast('Digest emailed.');
+  } catch (e) {
+    setDigestStatus(kind, '✗ ' + e.message, 'var(--red)');
+  }
+}
+
+async function sendDigestSlack(kind) {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const content = getDigestContent(kind);
+  if (!content || content.trim().length < 20) {
+    showToast('Generate the digest first.', 'error');
+    setDigestStatus(kind, '⚠ Click "Generate" above first.', 'var(--orange)');
+    return;
+  }
+  setDigestStatus(kind, '⏳ Posting to Slack...', 'var(--text-secondary)');
+  try {
+    // Slack truncates at 40k chars; trim if needed and use simple mrkdwn
+    const trimmed = content.length > 35000 ? content.slice(0, 35000) + '\n…(truncated)' : content;
+    const r = await aiCallApi('quick-send', {
+      channel: 'slack',
+      subject: '',
+      body: '*' + getDigestSubject(kind) + '*\n```\n' + trimmed + '\n```',
+      polish: false,
+    });
+    setDigestStatus(kind, '✓ Posted to Slack.', 'var(--green)');
+    showToast('Digest posted to Slack.');
+  } catch (e) {
+    setDigestStatus(kind, '✗ ' + e.message, 'var(--red)');
+  }
+}
+
+function copyDigest(kind) {
+  const content = getDigestContent(kind);
+  if (!content || content.trim().length < 20) {
+    showToast('Generate the digest first.', 'error');
+    return;
+  }
+  navigator.clipboard.writeText(content).then(() => {
+    setDigestStatus(kind, '✓ Copied to clipboard.', 'var(--green)');
+    showToast('Copied!');
+  }).catch(() => {
+    setDigestStatus(kind, '✗ Copy failed.', 'var(--red)');
+  });
+}
+
 function generateBrief() {
   const date = document.getElementById('briefDate').value;
   const recipients = document.getElementById('briefRecipients').value;
