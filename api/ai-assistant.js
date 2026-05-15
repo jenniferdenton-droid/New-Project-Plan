@@ -283,7 +283,7 @@ async function quickSend({ channel, subject, body, polish, project, settings }) 
 // ════════════════════════════════════════════════════════════════
 // ACTION 5: SCHEDULE MEETING (Google Calendar event + invites)
 // ════════════════════════════════════════════════════════════════
-async function scheduleMeetingAction({ title, date, startTime, duration, description, location, attendees, sendEmail: doEmail, postSlack, project, settings }) {
+async function scheduleMeetingAction({ title, date, startTime, duration, description, location, attendees, sendEmail: doEmail, postSlack, recurrence, recurrenceEnd, addMeet, project, settings }) {
   if (!title || !date || !startTime) throw new Error('title, date, and startTime are required.');
   if (!attendees || attendees.length === 0) throw new Error('No attendees.');
 
@@ -293,7 +293,27 @@ async function scheduleMeetingAction({ title, date, startTime, duration, descrip
   const endDt   = new Date(startDt.getTime() + (duration || 30) * 60000);
   const endISO  = endDt.toISOString().slice(0, 19);
 
-  const result = { eventLink: null, notifications: {} };
+  const result = { eventLink: null, meetLink: null, notifications: {} };
+
+  // Build RRULE for recurrence (Google Calendar uses iCal RRULE format)
+  // recurrence values: DAILY, WEEKLY, BIWEEKLY, MONTHLY, WEEKDAYS
+  let rrule = null;
+  if (recurrence && recurrence !== 'none') {
+    const map = {
+      DAILY:    'RRULE:FREQ=DAILY',
+      WEEKLY:   'RRULE:FREQ=WEEKLY',
+      BIWEEKLY: 'RRULE:FREQ=WEEKLY;INTERVAL=2',
+      MONTHLY:  'RRULE:FREQ=MONTHLY',
+      WEEKDAYS: 'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+    };
+    rrule = map[recurrence] || null;
+    if (rrule && recurrenceEnd) {
+      // UNTIL must be UTC in YYYYMMDDTHHMMSSZ format. We use end of day.
+      const untilDate = new Date(recurrenceEnd + 'T23:59:59');
+      const until = untilDate.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+      rrule += `;UNTIL=${until}`;
+    }
+  }
 
   // 1) Create the Google Calendar event with invites
   try {
@@ -307,12 +327,28 @@ async function scheduleMeetingAction({ title, date, startTime, duration, descrip
       attendees: attendees.map(a => ({ email: a.email, displayName: a.name || undefined })),
       reminders: { useDefault: true },
     };
+    if (rrule) event.recurrence = [rrule];
+    // Auto-generate Google Meet link
+    if (addMeet) {
+      event.conferenceData = {
+        createRequest: {
+          requestId: 'moxie-meet-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+          conferenceSolutionKey: { type: 'hangoutsMeet' },
+        },
+      };
+    }
     const created = await calendar.events.insert({
       calendarId: 'primary',
       requestBody: event,
-      sendUpdates: 'all', // Sends invite emails to all attendees natively
+      sendUpdates: 'all',
+      conferenceDataVersion: addMeet ? 1 : 0,
     });
     result.eventLink = created.data.htmlLink;
+    // Extract Meet link if generated
+    if (created.data.conferenceData && created.data.conferenceData.entryPoints) {
+      const videoEntry = created.data.conferenceData.entryPoints.find(ep => ep.entryPointType === 'video');
+      if (videoEntry) result.meetLink = videoEntry.uri;
+    }
   } catch (e) {
     throw new Error('Calendar create failed: ' + (e.message || String(e)));
   }
@@ -321,12 +357,17 @@ async function scheduleMeetingAction({ title, date, startTime, duration, descrip
   if (doEmail) {
     const recipients = attendees.map(a => a.email);
     const dateFmt = startDt.toLocaleString('en-US', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+    const recurText = recurrence && recurrence !== 'none'
+      ? ({ DAILY:'Daily', WEEKLY:'Weekly', BIWEEKLY:'Every 2 weeks', MONTHLY:'Monthly', WEEKDAYS:'Every weekday (Mon–Fri)' }[recurrence] || recurrence)
+        + (recurrenceEnd ? ` until ${recurrenceEnd}` : '')
+      : null;
     const html = `
       <div style="font-family:-apple-system,Segoe UI,sans-serif;max-width:600px;color:#1A1A2E;">
         <h2 style="color:#1F1A47;margin-bottom:6px;">${escapeHtml(title)}</h2>
-        <p style="color:#666;font-size:13px;margin-top:0;">${escapeHtml(project.name)} · ${escapeHtml(dateFmt)} · ${duration} min</p>
+        <p style="color:#666;font-size:13px;margin-top:0;">${escapeHtml(project.name)} · ${escapeHtml(dateFmt)} · ${duration} min${recurText ? ' · 🔁 ' + escapeHtml(recurText) : ''}</p>
         ${description ? `<p style="font-size:14px;line-height:1.5;">${escapeHtml(description)}</p>` : ''}
-        ${location ? `<p style="font-size:14px;"><strong>Location:</strong> ${escapeHtml(location)}</p>` : ''}
+        ${result.meetLink ? `<p style="margin:14px 0;"><a href="${result.meetLink}" style="background:#34A853;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">📹 Join Google Meet</a></p>` : ''}
+        ${location && location !== result.meetLink ? `<p style="font-size:14px;"><strong>Location:</strong> ${escapeHtml(location)}</p>` : ''}
         <p style="margin:18px 0;"><a href="${result.eventLink}" style="background:#1565C0;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600;">→ Open in Google Calendar</a></p>
         <p style="font-size:12px;color:#888;">You'll also receive a separate calendar invite from Google. — ${escapeHtml(settings.fromName || 'Jen')}</p>
       </div>`;
@@ -358,6 +399,65 @@ async function scheduleMeetingAction({ title, date, startTime, duration, descrip
   }
 
   return result;
+}
+
+// ════════════════════════════════════════════════════════════════
+// ACTION 6: LIST CALENDAR EVENTS (pull from Google Calendar)
+// Used to import existing meetings (including recurring) into the project.
+// ════════════════════════════════════════════════════════════════
+async function listCalendarEvents({ daysPast, daysFuture, search, project }) {
+  const calendar = getCalendarClient();
+  const now = new Date();
+  const timeMin = new Date(now.getTime() - (daysPast || 30) * 86400000).toISOString();
+  const timeMax = new Date(now.getTime() + (daysFuture || 60) * 86400000).toISOString();
+
+  // Use singleEvents=false to KEEP recurring events as a single master entry
+  // (rather than exploding into individual instances). That way the user
+  // imports the series once.
+  const res = await calendar.events.list({
+    calendarId: 'primary',
+    timeMin, timeMax,
+    singleEvents: false,
+    showDeleted: false,
+    maxResults: 250,
+    q: search || undefined, // free-text filter (e.g., project name)
+    orderBy: undefined,     // can't use orderBy without singleEvents
+  });
+
+  const items = (res.data.items || []).map(ev => {
+    // Surface a friendly shape
+    const startObj = ev.start || {};
+    const startDate = startObj.dateTime || startObj.date || '';
+    const recur = ev.recurrence && ev.recurrence.length > 0;
+    let recurDesc = '';
+    if (recur) {
+      const r = ev.recurrence[0] || '';
+      if (/FREQ=DAILY/.test(r)) recurDesc = 'Daily';
+      else if (/FREQ=WEEKLY;INTERVAL=2/.test(r)) recurDesc = 'Every 2 weeks';
+      else if (/FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR/.test(r)) recurDesc = 'Weekdays';
+      else if (/FREQ=WEEKLY/.test(r)) recurDesc = 'Weekly';
+      else if (/FREQ=MONTHLY/.test(r)) recurDesc = 'Monthly';
+      else recurDesc = 'Recurring';
+    }
+    return {
+      id: ev.id,
+      title: ev.summary || '(no title)',
+      description: ev.description || '',
+      location: ev.location || '',
+      startISO: startDate,
+      attendees: (ev.attendees || []).map(a => ({ email: a.email, name: a.displayName || '' })),
+      isRecurring: recur,
+      recurDesc,
+      meetLink: (ev.conferenceData && ev.conferenceData.entryPoints || [])
+        .filter(e => e.entryPointType === 'video').map(e => e.uri)[0] || '',
+      htmlLink: ev.htmlLink || '',
+      organizer: (ev.organizer && (ev.organizer.email || ev.organizer.displayName)) || '',
+    };
+  })
+  // sort by start date ascending
+  .sort((a, b) => (a.startISO || '').localeCompare(b.startISO || ''));
+
+  return { events: items };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -655,6 +755,9 @@ module.exports = async (req, res) => {
         break;
       case 'schedule-meeting':
         result = await scheduleMeetingAction({ ...payload, project, settings });
+        break;
+      case 'list-calendar-events':
+        result = await listCalendarEvents({ ...payload, project });
         break;
       default:
         return res.status(400).json({ error: 'Unknown action: ' + action });
