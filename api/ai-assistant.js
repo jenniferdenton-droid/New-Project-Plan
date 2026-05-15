@@ -515,20 +515,38 @@ ${pocs.length ? '\n*Team POCs:*\n• ' + pocs.join('\n• ') : ''}
 
 _Live updates auto-sync. Open the link anytime to see current state._`;
 
-  // 1) Post the message
-  const postRes = await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Authorization': `Bearer ${botToken}`,
-    },
-    body: JSON.stringify({ channel, text, mrkdwn: true }),
-  });
-  const postJson = await postRes.json().catch(() => ({}));
-  if (!postRes.ok || !postJson.ok) {
-    throw new Error('Slack post failed: ' + (postJson.error || postRes.statusText) +
-      (postJson.error === 'not_in_channel' ? ' — invite the bot to the channel first.' : ''));
+  // 1) Post the message (with auto-join recovery on not_in_channel)
+  const attemptPost = async () => {
+    const res = await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Bearer ${botToken}`,
+      },
+      body: JSON.stringify({ channel, text, mrkdwn: true }),
+    });
+    const json = await res.json().catch(() => ({}));
+    return { ok: res.ok && json.ok, json };
+  };
+
+  let pr = await attemptPost();
+  if (!pr.ok && pr.json.error === 'not_in_channel') {
+    const joinResult = await ensureBotInChannel(botToken, channel);
+    if (joinResult.joined) {
+      pr = await attemptPost();
+    } else {
+      const hint = joinResult.reason === 'private_channel'
+        ? ' — bot cannot auto-join private channels. Run /invite @<bot-name> in the channel.'
+        : joinResult.reason === 'missing_scope'
+        ? ' — to auto-join, add channels:join scope to your bot and reinstall. Or run /invite @<bot-name>.'
+        : ' — invite the bot first: /invite @<bot-name>';
+      throw new Error('Slack post failed: not_in_channel' + hint);
+    }
   }
+  if (!pr.ok) {
+    throw new Error('Slack post failed: ' + (pr.json.error || 'unknown'));
+  }
+  const postJson = pr.json;
   const ts = postJson.ts;          // timestamp of the message
   const channelId = postJson.channel; // resolved channel ID
 
@@ -613,6 +631,62 @@ _Live updates auto-sync. Open the link anytime to see current state._`;
 // ════════════════════════════════════════════════════════════════
 // HELPERS — Slack, Email, Drive, PPTX
 // ════════════════════════════════════════════════════════════════
+// Try to have the bot auto-join a public channel (needs channels:join scope).
+// Returns true if joined / already in, false otherwise (e.g., private channel).
+async function ensureBotInChannel(botToken, channel) {
+  // First find the channel ID — conversations.join needs the ID not the name
+  // For simplicity, we try the channel name directly; Slack often accepts both
+  try {
+    const res = await fetch('https://slack.com/api/conversations.join', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Bearer ${botToken}`,
+      },
+      body: JSON.stringify({ channel: channel.replace(/^#/, '') }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (json.ok) return { joined: true };
+    if (json.error === 'already_in_channel') return { joined: true };
+    if (json.error === 'method_not_supported_for_channel_type') {
+      return { joined: false, reason: 'private_channel' };
+    }
+    if (json.error === 'missing_scope') {
+      return { joined: false, reason: 'missing_scope' };
+    }
+    if (json.error === 'channel_not_found') {
+      // Try resolving via conversations.list to get the ID
+      const listRes = await fetch('https://slack.com/api/conversations.list?types=public_channel,private_channel&limit=1000', {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${botToken}` },
+      });
+      const listJson = await listRes.json().catch(() => ({}));
+      if (listJson.ok && Array.isArray(listJson.channels)) {
+        const target = listJson.channels.find(c => c.name === channel.replace(/^#/, ''));
+        if (target) {
+          if (target.is_member) return { joined: true };
+          const retryRes = await fetch('https://slack.com/api/conversations.join', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Authorization': `Bearer ${botToken}`,
+            },
+            body: JSON.stringify({ channel: target.id }),
+          });
+          const retryJson = await retryRes.json().catch(() => ({}));
+          if (retryJson.ok) return { joined: true };
+          if (retryJson.error === 'method_not_supported_for_channel_type') return { joined: false, reason: 'private_channel' };
+          return { joined: false, reason: retryJson.error || 'unknown' };
+        }
+      }
+      return { joined: false, reason: 'channel_not_found' };
+    }
+    return { joined: false, reason: json.error || 'unknown' };
+  } catch (e) {
+    return { joined: false, reason: e.message };
+  }
+}
+
 async function postToSlack({ text, settings }) {
   // Prefer Bot Token (chat.postMessage API) if available — works for any channel the bot is in.
   // Fall back to Webhook URL — channel-locked but no install required.
@@ -622,18 +696,37 @@ async function postToSlack({ text, settings }) {
   if (botToken) {
     const channel = (settings && settings.slackChannel) || process.env.SLACK_CHANNEL;
     if (!channel) throw new Error('SLACK_BOT_TOKEN set but no channel — set SLACK_CHANNEL env var or fill Slack Channel in Settings.');
-    const res = await fetch('https://slack.com/api/chat.postMessage', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Authorization': `Bearer ${botToken}`,
-      },
-      body: JSON.stringify({ channel, text, mrkdwn: true }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.ok) {
-      throw new Error('Slack chat.postMessage failed: ' + (json.error || res.statusText) +
-        (json.error === 'not_in_channel' ? ' — invite the bot: /invite @<your-app-name> in the channel' : ''));
+
+    const attemptPost = async () => {
+      const res = await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': `Bearer ${botToken}`,
+        },
+        body: JSON.stringify({ channel, text, mrkdwn: true }),
+      });
+      const json = await res.json().catch(() => ({}));
+      return { ok: res.ok && json.ok, json, status: res.status, statusText: res.statusText };
+    };
+
+    let r = await attemptPost();
+    if (!r.ok && r.json.error === 'not_in_channel') {
+      // Auto-recovery: try to join the channel, then retry
+      const joinResult = await ensureBotInChannel(botToken, channel);
+      if (joinResult.joined) {
+        r = await attemptPost();
+      } else {
+        const hint = joinResult.reason === 'private_channel'
+          ? ` — bot can't auto-join private channels. Invite manually: /invite @<bot> in ${channel}`
+          : joinResult.reason === 'missing_scope'
+          ? ` — to enable auto-join, add channels:join scope to your Slack bot and reinstall, OR invite manually: /invite @<bot> in ${channel}`
+          : ` — invite manually: /invite @<bot> in ${channel}`;
+        throw new Error('Slack chat.postMessage failed: not_in_channel' + hint);
+      }
+    }
+    if (!r.ok) {
+      throw new Error('Slack chat.postMessage failed: ' + (r.json.error || r.statusText));
     }
     return;
   }
