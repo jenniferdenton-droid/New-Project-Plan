@@ -336,6 +336,12 @@
   </div>
 
   <div id="dashboardContent" style="display:none;">
+    <!-- Dashboard top toolbar -->
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <button class="btn btn-primary" style="background:linear-gradient(135deg,#6B4EFF,#9061F9);" onclick="openProjectUpdateModal()" title="Generate a weekly-style project status update — edit then send to email or Slack">📣 Project Update &amp; Outreach</button>
+      <button class="btn btn-teal" onclick="openCompleteProjectModal()" title="Open the project sign-off, launch checklist, and handoff/SOPs">✅ Complete Project →</button>
+    </div>
+
     <!-- RAG Status -->
     <div id="ragCard" class="card" style="margin-bottom:16px;">
       <div id="ragCardInner" style="padding:14px 20px;border-radius:var(--radius);display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
@@ -410,14 +416,8 @@
       <div class="card-body" id="dashUpcoming"></div>
     </div>
 
-    <!-- Launch checklist progress -->
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">🚀 Launch Checklist Progress</div>
-        <button class="btn btn-sm btn-teal" onclick="openCompleteProjectModal()">✅ Complete Project →</button>
-      </div>
-      <div class="card-body" id="dashLaunch"></div>
-    </div>
+    <!-- Launch Checklist Progress card removed — content lives in the Complete Project modal. -->
+    <div id="dashLaunch" style="display:none;"></div>
   </div>
 </div>
 
@@ -906,6 +906,8 @@
     <button class="btn btn-secondary btn-sm" onclick="openManagePeopleChooser()" title="Add/manage stakeholders or email recipients">👥 Manage People</button>
     <button class="btn btn-secondary btn-sm" onclick="openTaskTemplatesModal()" title="Load a pre-built task template pack">📋 Load Templates</button>
     <button class="btn btn-secondary btn-sm" onclick="openDocImportModal()" title="Paste a proposal to auto-extract tasks">📄 Import from Doc</button>
+    <button class="btn btn-secondary btn-sm" onclick="collapseAllMilestones()" title="Hide tasks &amp; action items under every milestone">▶ Collapse All</button>
+    <button class="btn btn-secondary btn-sm" onclick="expandAllMilestones()" title="Show tasks &amp; action items under every milestone">▼ Expand All</button>
     <div style="flex:1;"></div>
     <button class="btn btn-teal" onclick="openCompleteProjectModal()" title="Open the project sign-off, launch checklist, and handoff/SOPs">✅ Complete Project →</button>
   </div>
@@ -2272,6 +2274,44 @@
   </div>
 </div>
 
+<!-- ═══ PROJECT UPDATE & OUTREACH ═══ -->
+<div class="modal-overlay" id="projectUpdateModal">
+  <div class="modal" style="max-width:820px;max-height:92vh;overflow-y:auto;">
+    <div class="modal-header" style="background:linear-gradient(90deg,#F3E8FF,transparent);position:sticky;top:0;z-index:10;">
+      <div class="modal-title">📣 Project Update &amp; Outreach</div>
+      <button class="close-btn" onclick="closeModal('projectUpdateModal')">✕</button>
+    </div>
+    <div style="padding:14px 22px 22px;">
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">
+        One-click status update grounded in your live project data: completed in the last 7 days, upcoming in the next 7 days, past-due items, and active risks. Edit the text below, then send to your email list and Slack channel.
+      </p>
+
+      <!-- Cadence picker (lets user pick weekly/daily preview) -->
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;">Format:</label>
+        <select id="proj_update_kind" style="font-size:13px;">
+          <option value="weekly" selected>Weekly status</option>
+          <option value="daily">Daily digest</option>
+          <option value="brief">Meeting brief</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="buildProjectUpdate()" style="font-size:12px;">🔄 Generate</button>
+      </div>
+
+      <textarea id="proj_update_text" rows="14"
+        placeholder="Click Generate to draft the update. Edit anything below before sending."
+        style="width:100%;font-size:12px;line-height:1.55;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:12px;border:1px solid var(--border);border-radius:6px;background:var(--gray-light);"></textarea>
+
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="copyAiOutput('proj_update_text')">📋 Copy</button>
+        <div style="flex:1;"></div>
+        <button class="btn btn-teal" onclick="sendProjectUpdateEmail()">📧 Send Email to All</button>
+        <button class="btn btn-primary" style="background:#4A154B;" onclick="sendProjectUpdateSlack()">💬 Send to Slack Channel</button>
+      </div>
+      <div id="proj_update_status" style="font-size:11px;color:var(--text-secondary);margin-top:8px;min-height:14px;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ MANAGE PEOPLE CHOOSER ═══ -->
 <div class="modal-overlay" id="managePeopleChooserModal">
   <div class="modal" style="max-width:520px;">
@@ -2369,7 +2409,11 @@
       <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">
         Claude scans the whole project: duplicate-looking tasks, missing owners or dates, stale items, capacity risks, and computes a health score.
       </p>
-      <button class="btn btn-primary" style="width:100%;margin-bottom:14px;background:linear-gradient(135deg,#1F1A47,#6B4EFF);" onclick="runPmAiScan()">🔍 Run Health Check</button>
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <button class="btn btn-primary" style="flex:1;background:linear-gradient(135deg,#1F1A47,#6B4EFF);" onclick="runPmAiScan()">🔍 Run Health Check</button>
+        <button class="btn btn-secondary btn-sm" onclick="togglePmAiHistory()" id="pm_ai_history_btn" style="white-space:nowrap;">📜 History</button>
+      </div>
+      <div id="pm_ai_history_panel" style="display:none;background:var(--gray-light);border-radius:6px;padding:10px 12px;margin-bottom:14px;"></div>
       <div id="pm_ai_status" style="font-size:12px;color:var(--text-secondary);min-height:18px;text-align:center;"></div>
       <div id="pm_ai_findings" style="margin-top:14px;"></div>
     </div>
@@ -5193,6 +5237,28 @@ function renderPlanView() {
   if (tbody) renderTasks();
 }
 
+// ── Milestone collapse / expand state ──────────────────────────
+// Keyed by milestone id (number) or the string 'unassigned'.
+window._milestoneCollapsed = window._milestoneCollapsed || {};
+
+function toggleMilestoneCollapse(id) {
+  if (!window._milestoneCollapsed) window._milestoneCollapsed = {};
+  window._milestoneCollapsed[id] = !window._milestoneCollapsed[id];
+  if (typeof renderMilestones === 'function') renderMilestones();
+}
+
+function collapseAllMilestones() {
+  window._milestoneCollapsed = window._milestoneCollapsed || {};
+  (project.milestones || []).forEach(m => { window._milestoneCollapsed[m.id] = true; });
+  window._milestoneCollapsed['unassigned'] = true;
+  renderMilestones();
+}
+
+function expandAllMilestones() {
+  window._milestoneCollapsed = {};
+  renderMilestones();
+}
+
 function clearPlanFilters() {
   ['planFilterDueFrom','planFilterDueTo','planFilterStatus','planFilterOwner'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
@@ -5555,10 +5621,13 @@ function renderMilestones() {
       const initials = p.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
       return `<span title="${escHtml(p.name)}${p.role?' · '+p.role:''}" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:${cfg.dot};color:#fff;font-size:10px;font-weight:700;flex-shrink:0;">${initials}</span>`;
     }).join('');
+    const collapsed = !!(window._milestoneCollapsed && window._milestoneCollapsed[m.id]);
+    const caret = collapsed ? '▶' : '▼';
     return `
       <div style="border:2px solid ${cfg.dot};border-radius:var(--radius);margin-bottom:20px;overflow:hidden;">
-        <!-- Milestone header -->
-        <div style="background:${cfg.dot}18;border-bottom:1px solid ${cfg.dot}40;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <!-- Milestone header (click anywhere to expand/collapse) -->
+        <div style="background:${cfg.dot}18;border-bottom:1px solid ${cfg.dot}40;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer;" onclick="toggleMilestoneCollapse(${m.id})">
+          <span style="font-size:13px;color:var(--text-secondary);font-weight:700;width:14px;display:inline-block;text-align:center;" title="${collapsed?'Expand':'Collapse'}">${caret}</span>
           <div style="width:14px;height:14px;border-radius:50%;background:${cfg.dot};flex-shrink:0;box-shadow:0 0 0 3px ${cfg.dot}30;"></div>
           <div style="flex:1;min-width:0;">
             <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
@@ -5573,7 +5642,7 @@ function renderMilestones() {
               ${memberChips ? `<span style="display:flex;align-items:center;gap:3px;margin-left:4px;">${memberChips}</span>` : ''}
             </div>
           </div>
-          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;" onclick="event.stopPropagation();">
             <button class="btn-icon" onclick="openMilestoneAssignModal(${m.id})" title="Assign team members" style="font-size:14px;">👥</button>
             <select class="inline-select" style="font-size:11px;" onchange="updateMilestoneField(${m.id},'status',this.value)">
               ${Object.keys(MS_STATUS_CONFIG).map(s=>`<option value="${s}" ${m.status===s?'selected':''}>${MS_STATUS_CONFIG[s].label}</option>`).join('')}
@@ -5583,25 +5652,28 @@ function renderMilestones() {
             <button class="btn-icon" onclick="deleteMilestone(${m.id})" title="Delete milestone">🗑</button>
           </div>
         </div>
-        <!-- Tasks + AIs -->
-        <div style="padding:14px 16px;">
+        <!-- Tasks + AIs (hidden when milestone is collapsed) -->
+        <div style="padding:14px 16px;${collapsed?'display:none;':''}">
           ${taskSection(m.id)}
           ${aiSection(m.id)}
         </div>
       </div>`;
   }
 
-  // ── Unassigned section ────────────────────────────────
+  // ── Unassigned section (collapsible) ────────────────────
   const unassignedTasks = tasks.filter(t => !t.milestoneId);
   const unassignedAIs   = ais.filter(a => !a.milestoneId);
+  const unassignedCollapsed = !!(window._milestoneCollapsed && window._milestoneCollapsed['unassigned']);
+  const unCaret = unassignedCollapsed ? '▶' : '▼';
   const unassigned = (unassignedTasks.length + unassignedAIs.length) > 0 ? `
     <div style="border:1px dashed var(--border);border-radius:var(--radius);margin-bottom:20px;overflow:hidden;">
-      <div style="background:var(--bg-alt,#f8f9fb);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;">
+      <div style="background:var(--bg-alt,#f8f9fb);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="toggleMilestoneCollapse('unassigned')">
+        <span style="font-size:13px;color:var(--text-secondary);font-weight:700;width:14px;display:inline-block;text-align:center;">${unCaret}</span>
         <span style="font-size:12px;color:var(--text-secondary);">📌</span>
         <span style="font-weight:700;font-size:13px;color:var(--text-secondary);">Unassigned</span>
         <span style="font-size:12px;color:var(--text-secondary);">${unassignedTasks.length} task${unassignedTasks.length!==1?'s':''}, ${unassignedAIs.filter(a=>a.status!=='Done').length} open AIs</span>
       </div>
-      <div style="padding:14px 16px;">
+      <div style="padding:14px 16px;${unassignedCollapsed?'display:none;':''}">
         ${taskSection(null)}
         ${aiSection(null)}
       </div>
@@ -6058,6 +6130,81 @@ function buildLaunchChecklist() {
   renderPrelaunchOnSetup();
 }
 
+// ═══════════════════════════════════════════════════════
+// PROJECT UPDATE & OUTREACH — one-click status from dashboard
+// ═══════════════════════════════════════════════════════
+function openProjectUpdateModal() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  document.getElementById('projectUpdateModal').classList.add('open');
+  // Auto-generate a draft on open so the textarea isn't empty
+  setTimeout(buildProjectUpdate, 120);
+}
+
+function buildProjectUpdate() {
+  if (!hasProject) return;
+  const kind = document.getElementById('proj_update_kind')?.value || 'weekly';
+  try {
+    const data = buildDigestData(kind);
+    const text = renderDigestText(data, kind);
+    document.getElementById('proj_update_text').value = text;
+    setAiStatus('proj_update_status', '✓ Draft built — edit then send.', 'var(--green)');
+  } catch (e) {
+    setAiStatus('proj_update_status', '✗ ' + e.message, 'var(--red)');
+  }
+}
+
+async function sendProjectUpdateEmail() {
+  if (!hasProject) return;
+  const text = (document.getElementById('proj_update_text')?.value || '').trim();
+  if (!text) { showToast('Generate the update first.', 'error'); return; }
+  const kind = document.getElementById('proj_update_kind')?.value || 'weekly';
+  const subjectMap = {
+    weekly: `Weekly Update — ${project.name || 'Project'}`,
+    daily:  `Daily Update — ${project.name || 'Project'}`,
+    brief:  `Meeting Brief — ${project.name || 'Project'}`,
+  };
+  setAiStatus('proj_update_status', '⏳ Sending email…');
+  try {
+    // Use the structured HTML renderer so the email looks polished
+    const data = buildDigestData(kind);
+    // Replace the rendered text with the user's edited version so any edits land in the email
+    // (We re-use renderDigestHtml structure but inject the textarea content as plain text.)
+    const esc = s => String(s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+    const editedHtml = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.6;white-space:pre-wrap;color:#1F2937;">${esc(text)}</div>`;
+    await aiCallApi('quick-send', {
+      channel: 'email',
+      subject: subjectMap[kind] || `Project Update — ${project.name || 'Project'}`,
+      body: editedHtml,
+      polish: false,
+    });
+    setAiStatus('proj_update_status', '✓ Email sent to all recipients.', 'var(--green)');
+    showToast('Update emailed.');
+  } catch (e) {
+    setAiStatus('proj_update_status', '✗ Email failed: ' + e.message, 'var(--red)');
+  }
+}
+
+async function sendProjectUpdateSlack() {
+  if (!hasProject) return;
+  const text = (document.getElementById('proj_update_text')?.value || '').trim();
+  if (!text) { showToast('Generate the update first.', 'error'); return; }
+  const kind = document.getElementById('proj_update_kind')?.value || 'weekly';
+  const title = kind === 'weekly' ? '📅 Weekly Update' : kind === 'daily' ? '🗓 Daily Update' : '📋 Meeting Brief';
+  setAiStatus('proj_update_status', '⏳ Posting to Slack…');
+  try {
+    await aiCallApi('quick-send', {
+      channel: 'slack',
+      subject: '',
+      body: `*${title}* — *${project.name || 'Project'}*\n\n${text}`,
+      polish: false,
+    });
+    setAiStatus('proj_update_status', '✓ Posted to Slack channel.', 'var(--green)');
+    showToast('Update posted to Slack.');
+  } catch (e) {
+    setAiStatus('proj_update_status', '✗ Slack failed: ' + e.message, 'var(--red)');
+  }
+}
+
 // Manage People chooser — splits to Stakeholders or Email Recipients
 function openManagePeopleChooser() {
   if (!hasProject) { showToast('Open a project first.', 'error'); return; }
@@ -6243,18 +6390,43 @@ async function runPmAiScan() {
   findingsEl.innerHTML = '';
   try {
     const r = await aiCallApi('pm-ai-scan', {});
-    renderPmAiFindings(r);
-    statusEl.textContent = `✓ Scanned · ${r.elapsedMs || 0}ms`;
-    statusEl.style.color = 'var(--green)';
-    // Stamp the dashboard health
+    // Stash full findings + history so we can show interactive controls + previews
+    window._pmAiLastFindings = r;
     project.pmAiLastScan = {
       at: new Date().toISOString(),
       healthScore: r.healthScore,
       duplicateCount: (r.duplicates || []).length,
       gapCount: (r.gaps || []).length,
     };
+    // Maintain history (max 10 entries, most recent first)
+    if (!Array.isArray(project.pmAiHistory)) project.pmAiHistory = [];
+    project.pmAiHistory.unshift({
+      at: project.pmAiLastScan.at,
+      healthScore: r.healthScore,
+      healthSummary: r.healthSummary || '',
+      duplicateCount: (r.duplicates || []).length,
+      gapCount: (r.gaps || []).length,
+      suggestions: r.suggestions || [],
+      duplicates: r.duplicates || [],
+      gaps: r.gaps || [],
+    });
+    if (project.pmAiHistory.length > 10) project.pmAiHistory = project.pmAiHistory.slice(0, 10);
+
+    // ── AUTO-SYNC the dashboard project-health banner with the AI's health score ──
+    const h = r.healthScore;
+    const newStatus = h >= 80 ? 'Green' : h >= 60 ? 'Amber' : 'Red';
+    if (!project.ragStatus) project.ragStatus = {};
+    project.ragStatus.status = newStatus;
+    project.ragStatus.reason = r.healthSummary || `${h}/100 health score from AI scan`;
+    project.ragStatus.updatedAt = new Date().toISOString();
+    project.ragStatus.updatedBy = 'Project Health Check (AI)';
+
+    renderPmAiFindings(r);
+    statusEl.textContent = `✓ Scanned · ${r.elapsedMs || 0}ms · banner synced to ${newStatus}`;
+    statusEl.style.color = 'var(--green)';
     triggerAutoSave();
     if (typeof updateDashboard === 'function') updateDashboard();
+    if (typeof refreshAiRagCurrent === 'function') refreshAiRagCurrent();
   } catch (e) {
     statusEl.textContent = '✗ ' + e.message;
     statusEl.style.color = 'var(--red)';
@@ -6272,12 +6444,37 @@ function renderPmAiFindings(r) {
   const gaps = r.gaps || [];
   const sugs = r.suggestions || [];
 
+  // Per-duplicate-group action buttons (Keep Both / Merge / Delete / Clarify / Skip)
+  const renderDuplicateBlock = (d, idx) => {
+    const taskRows = (d.ids || []).map(id => {
+      const t = (project.tasks || []).find(x => x.id === id);
+      if (!t) return '';
+      return `<div style="display:flex;align-items:center;gap:6px;margin:4px 0;font-size:11px;background:var(--gray-light);padding:5px 8px;border-radius:4px;">
+        <span style="font-weight:700;color:var(--gray-dark);">#${id}</span>
+        <span style="flex:1;">${escHtml(t.task || '')}</span>
+        <span style="color:var(--text-secondary);">— ${escHtml(t.owner || 'no owner')}</span>
+        <button class="btn-icon" style="font-size:10px;color:var(--red);padding:2px 6px;border:1px solid var(--red);border-radius:4px;" onclick="pmAiDupDeleteOne(${idx}, ${id})">Delete</button>
+        <button class="btn-icon" style="font-size:10px;color:var(--purple);padding:2px 6px;border:1px solid var(--purple);border-radius:4px;" onclick="pmAiDupClarifyOne(${idx}, ${id})">Clarify</button>
+      </div>`;
+    }).join('');
+    return `<div id="pm_dup_${idx}" style="background:#fff;border:1px solid #F59E0B;border-left:3px solid #F59E0B;border-radius:6px;padding:10px 12px;margin-bottom:6px;font-size:12px;">
+      <div style="font-weight:600;color:#92400E;margin-bottom:6px;">${escHtml(d.reason || 'Similar wording')}</div>
+      ${taskRows}
+      ${d.recommendation ? `<div style="font-size:11px;color:var(--purple);margin-top:6px;font-style:italic;">💡 ${escHtml(d.recommendation)}</div>` : ''}
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+        <button class="btn btn-sm" style="font-size:11px;background:#D1FAE5;color:#065F46;border:1px solid #10B981;" onclick="pmAiDupKeepBoth(${idx})">✓ Keep Both</button>
+        <button class="btn btn-sm" style="font-size:11px;background:#F3E8FF;color:var(--purple);border:1px solid var(--purple);" onclick="pmAiDupMerge(${idx})">🔀 Merge → keep one</button>
+        <button class="btn btn-sm" style="font-size:11px;background:transparent;color:var(--text-secondary);border:1px solid var(--border);" onclick="pmAiDupSkip(${idx})">Skip</button>
+      </div>
+    </div>`;
+  };
+
   el.innerHTML = `
     <!-- Health score header -->
     <div style="background:${healthBg};border:2px solid ${healthColor};border-radius:10px;padding:16px 20px;margin-bottom:14px;display:flex;align-items:center;gap:16px;">
       <div style="font-size:36px;font-weight:900;color:${healthColor};line-height:1;">${health}</div>
       <div style="flex:1;">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:${healthColor};letter-spacing:1px;">Health Score · ${healthLabel}</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:${healthColor};letter-spacing:1px;">Health Score · ${healthLabel} · Dashboard banner synced</div>
         <div style="font-size:13px;color:${healthColor};margin-top:2px;">${escHtml(r.healthSummary || '')}</div>
       </div>
     </div>
@@ -6285,16 +6482,7 @@ function renderPmAiFindings(r) {
     <!-- Duplicates -->
     <div style="margin-bottom:14px;">
       <div style="font-size:12px;font-weight:800;color:var(--gray-dark);margin-bottom:6px;">🔁 Possible Duplicate Tasks (${dups.length})</div>
-      ${dups.length ? dups.map((d, idx) => `
-        <div style="background:#fff;border:1px solid #F59E0B;border-left:3px solid #F59E0B;border-radius:6px;padding:10px 12px;margin-bottom:6px;font-size:12px;">
-          <div style="font-weight:600;color:#92400E;margin-bottom:3px;">${escHtml(d.reason || 'Similar wording')}</div>
-          ${(d.ids || []).map(id => {
-            const t = (project.tasks || []).find(x => x.id === id);
-            return t ? `<div style="color:var(--gray-dark);font-size:11px;margin:2px 0;">• <strong>#${id}</strong> ${escHtml(t.task || '')} — ${escHtml(t.owner || 'no owner')}</div>` : '';
-          }).join('')}
-          ${d.recommendation ? `<div style="font-size:11px;color:var(--purple);margin-top:4px;font-style:italic;">${escHtml(d.recommendation)}</div>` : ''}
-        </div>
-      `).join('') : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;">No duplicates detected.</div>'}
+      ${dups.length ? dups.map(renderDuplicateBlock).join('') : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;">No duplicates detected.</div>'}
     </div>
 
     <!-- Gaps -->
@@ -6316,6 +6504,128 @@ function renderPmAiFindings(r) {
       </ul>` : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;">No specific recommendations.</div>'}
     </div>
   `;
+}
+
+// ── Duplicate-task actions ──
+function pmAiDupKeepBoth(idx) {
+  const block = document.getElementById('pm_dup_' + idx);
+  if (block) {
+    block.style.background = '#D1FAE5';
+    block.style.borderColor = '#10B981';
+    block.style.borderLeftColor = '#10B981';
+    block.innerHTML += '<div style="margin-top:6px;font-size:11px;color:#065F46;font-weight:700;">✓ Marked: Keep Both</div>';
+  }
+}
+function pmAiDupSkip(idx) {
+  const block = document.getElementById('pm_dup_' + idx);
+  if (block) block.style.display = 'none';
+}
+function pmAiDupMerge(idx) {
+  const d = (window._pmAiLastFindings?.duplicates || [])[idx];
+  if (!d) return;
+  const ids = d.ids || [];
+  if (ids.length < 2) { showToast('Need at least 2 tasks to merge.', 'error'); return; }
+  const tasks = ids.map(id => (project.tasks || []).find(t => t.id === id)).filter(Boolean);
+  const promptText = 'Which task # do you want to KEEP? The others will be deleted (their notes appended to the keeper).\n\n' +
+    tasks.map(t => `  #${t.id} — ${t.task}`).join('\n') + '\n\nEnter the task #:';
+  const keepIdStr = prompt(promptText);
+  const keepId = parseInt(keepIdStr, 10);
+  const keeper = tasks.find(t => t.id === keepId);
+  if (!keeper) { showToast('Invalid task #.', 'error'); return; }
+  const losers = tasks.filter(t => t.id !== keepId);
+  // Concatenate loser notes into keeper.notes
+  const mergedNotes = [keeper.notes || '', ...losers.map(l => `[Merged from #${l.id}: ${l.task}] ${l.notes || ''}`).filter(Boolean)].join('\n').trim();
+  keeper.notes = mergedNotes;
+  keeper.updatedAt = new Date().toISOString();
+  // Delete losers
+  losers.forEach(l => {
+    project.tasks = (project.tasks || []).filter(t => t.id !== l.id);
+    tombstone(_tombstonedTaskIds, l.id);
+  });
+  if (typeof renderTasks === 'function')       renderTasks();
+  if (typeof renderMilestones === 'function')  renderMilestones();
+  if (typeof renderWorkstreams === 'function') renderWorkstreams();
+  triggerAutoSave();
+  showToast(`✓ Merged ${losers.length} task(s) into #${keepId}.`);
+  pmAiDupSkip(idx);
+}
+function pmAiDupDeleteOne(idx, taskId) {
+  const t = (project.tasks || []).find(x => x.id === taskId);
+  if (!t) return;
+  if (!confirm(`Delete task #${taskId} — "${t.task}"?\n\nThis cannot be undone.`)) return;
+  project.tasks = (project.tasks || []).filter(x => x.id !== taskId);
+  tombstone(_tombstonedTaskIds, taskId);
+  if (typeof renderTasks === 'function')       renderTasks();
+  if (typeof renderMilestones === 'function')  renderMilestones();
+  if (typeof renderWorkstreams === 'function') renderWorkstreams();
+  triggerAutoSave();
+  showToast(`✓ Deleted task #${taskId}.`);
+  // Re-render the findings to reflect the deletion
+  if (window._pmAiLastFindings) renderPmAiFindings(window._pmAiLastFindings);
+}
+function pmAiDupClarifyOne(idx, taskId) {
+  const t = (project.tasks || []).find(x => x.id === taskId);
+  if (!t) return;
+  const newName = prompt(`Rename task #${taskId} to clarify (current: "${t.task}"):`, t.task);
+  if (newName === null || !newName.trim()) return;
+  t.task = newName.trim();
+  t.updatedAt = new Date().toISOString();
+  if (typeof renderTasks === 'function')       renderTasks();
+  if (typeof renderMilestones === 'function')  renderMilestones();
+  triggerAutoSave();
+  showToast(`✓ Renamed task #${taskId}.`);
+  if (window._pmAiLastFindings) renderPmAiFindings(window._pmAiLastFindings);
+}
+
+// ── History panel: list of past scans + click-to-preview ──
+function togglePmAiHistory() {
+  const panel = document.getElementById('pm_ai_history_panel');
+  if (!panel) return;
+  if (panel.style.display === 'block') {
+    panel.style.display = 'none';
+    return;
+  }
+  const history = Array.isArray(project.pmAiHistory) ? project.pmAiHistory : [];
+  if (!history.length) {
+    panel.innerHTML = '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;">No past scans yet. Run a Health Check first.</div>';
+    panel.style.display = 'block';
+    return;
+  }
+  panel.innerHTML = `
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;margin-bottom:8px;">📜 Past Scans (${history.length})</div>
+    ${history.map((h, i) => {
+      const d = h.at ? new Date(h.at) : null;
+      const dateStr = d ? d.toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : 'unknown';
+      const color = h.healthScore >= 80 ? '#10B981' : h.healthScore >= 60 ? '#F59E0B' : '#DC2626';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;">
+        <span style="background:${color};color:#fff;font-weight:800;font-size:11px;padding:2px 10px;border-radius:12px;min-width:38px;text-align:center;">${h.healthScore}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;">${escHtml(dateStr)}</div>
+          <div style="font-size:11px;color:var(--text-secondary);">${escHtml(h.healthSummary || '')}</div>
+          <div style="font-size:11px;color:var(--text-secondary);">${h.duplicateCount || 0} dupes · ${h.gapCount || 0} gaps</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="pmAiPreviewHistory(${i})">Preview</button>
+      </div>`;
+    }).join('')}
+  `;
+  panel.style.display = 'block';
+}
+
+function pmAiPreviewHistory(i) {
+  const h = (project.pmAiHistory || [])[i];
+  if (!h) return;
+  // Reconstruct a findings-shaped object from the history entry
+  const preview = {
+    healthScore: h.healthScore,
+    healthSummary: h.healthSummary,
+    duplicates: h.duplicates || [],
+    gaps: h.gaps || [],
+    suggestions: h.suggestions || [],
+  };
+  window._pmAiLastFindings = preview;
+  renderPmAiFindings(preview);
+  document.getElementById('pm_ai_status').textContent = `📜 Previewing scan from ${new Date(h.at).toLocaleString()}`;
+  document.getElementById('pm_ai_status').style.color = 'var(--purple)';
 }
 
 // ── PRE-LAUNCH NUDGE on app load ──
@@ -7249,54 +7559,45 @@ function renderTeamRoster() {
   const el = document.getElementById('dashTeamRoster');
   if (!el) return;
 
-  // Build a map: team → Set of owner names
-  const map = {};
-  const allOwners = new Set();
-  (project.tasks || []).forEach(t => expandOwners(t.owner).forEach(o => allOwners.add(o)));
-  (project.actionItems || []).forEach(a => expandOwners(a.owner).forEach(o => allOwners.add(o)));
-  (project.milestones || []).forEach(m => {
-    const ownerStr = (m.notes || '').match(/Owners?:\s*([^\.]+)/i);
-    if (ownerStr) expandOwners(ownerStr[1]).forEach(o => allOwners.add(o));
-  });
-  (project.people || []).forEach(p => { if (p.name) allOwners.add(p.name); });
-
-  allOwners.forEach(name => {
-    inferTeams(name).forEach(team => {
-      if (!map[team]) map[team] = new Set();
-      map[team].add(name);
+  // For each included stakeholder team, show ONE person — the contactName from the Stakeholder Plan.
+  // This avoids the prior bug where team labels and inferred-owner strings were treated as people.
+  const rows = STAKEHOLDER_LIST
+    .filter(s => project.stakeholders?.[s.key]?.included)
+    .map(s => {
+      const sd = project.stakeholders[s.key] || {};
+      const contactName = (sd.contactName || '').trim();
+      const teamLabel = s.label;
+      const color = teamColor(teamLabel);
+      const taskCount = (project.tasks || []).filter(t => inferTeams(t.owner || '').includes(teamLabel)).length;
+      const aiCount   = (project.actionItems || []).filter(a => a.status !== 'Done' && inferTeams(a.owner || '').includes(teamLabel)).length;
+      return { teamLabel, contactName, color, taskCount, aiCount };
     });
-  });
 
-  const orderedTeams = STAKEHOLDER_LIST.map(s => s.label).filter(t => map[t]);
-  if (map['Other'])      orderedTeams.push('Other');
-  if (map['Unassigned']) orderedTeams.push('Unassigned');
-
-  if (orderedTeams.length === 0) {
-    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:13px;">No owners yet. Add tasks or action items with owners to populate.</div>';
+  if (rows.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:13px;">No teams included yet. Open Project Setup → Stakeholder Plan to add POCs.</div>';
     return;
   }
 
   el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">' +
-    orderedTeams.map(team => {
-      const members = [...map[team]].sort();
-      const color = teamColor(team);
-      // Count tasks / AIs owned by anyone on this team
-      const taskCount = (project.tasks || []).filter(t => expandOwners(t.owner).some(o => members.includes(o))).length;
-      const aiCount   = (project.actionItems || []).filter(a => a.status !== 'Done' && expandOwners(a.owner).some(o => members.includes(o))).length;
+    rows.map(r => {
+      const initials = r.contactName
+        ? r.contactName.split(' ').map(w => w[0] || '').join('').toUpperCase().slice(0, 2)
+        : '—';
+      const personLine = r.contactName
+        ? `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;">
+             <span style="width:24px;height:24px;border-radius:50%;background:${r.color}25;color:${r.color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0;">${initials}</span>
+             <span style="font-weight:600;">${escHtml(r.contactName)}</span>
+           </div>`
+        : `<div style="padding:6px 0;font-size:12px;color:var(--text-secondary);font-style:italic;">No POC assigned</div>`;
       return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--white);overflow:hidden;">
-        <div style="background:${color};color:#fff;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">
-          <span style="font-weight:700;font-size:12px;">${escHtml(team)}</span>
-          <span style="font-size:11px;opacity:.9;">${members.length} member${members.length!==1?'s':''}</span>
+        <div style="background:${r.color};color:#fff;padding:8px 12px;">
+          <span style="font-weight:700;font-size:12px;">${escHtml(r.teamLabel)}</span>
         </div>
         <div style="padding:10px 12px;">
-          ${members.slice(0,8).map(n => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;">
-            <span style="width:24px;height:24px;border-radius:50%;background:${color}25;color:${color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0;">${(n.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2))}</span>
-            <span>${escHtml(n)}</span>
-          </div>`).join('')}
-          ${members.length>8 ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">+${members.length-8} more</div>` : ''}
+          ${personLine}
           <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--text-secondary);display:flex;gap:10px;">
-            <span><strong style="color:${color};">${taskCount}</strong> tasks</span>
-            <span><strong style="color:${color};">${aiCount}</strong> open AIs</span>
+            <span><strong style="color:${r.color};">${r.taskCount}</strong> tasks</span>
+            <span><strong style="color:${r.color};">${r.aiCount}</strong> open AIs</span>
           </div>
         </div>
       </div>`;
@@ -7523,7 +7824,7 @@ function updateDashboard() {
     { num: atRisk,       label: 'At Risk',           color: '--orange' },
     { num: blocked,      label: 'Blocked',           color: '--red'    },
     { num: flaggedRisks, label: 'Open Risks',        color: '--red'    },
-    { num: launchDone + '/' + launchTotal, label: 'Launch Checklist', color: '--teal' },
+    // Launch Checklist stat removed — that lives in the Complete Project modal now
   ];
   // Project Health Check card — only shown after the first scan
   if (project.pmAiLastScan && typeof project.pmAiLastScan.healthScore === 'number') {
