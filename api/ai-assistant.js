@@ -1361,7 +1361,7 @@ async function sendLeadReminder({ project, settings, fbProjectId }) {
     : null;
   const staleText = daysAgo === null ? 'No health check has been run yet.' : (daysAgo > 7 ? `It's been ${daysAgo} days since the last health check.` : `Last health check was ${lastWhen}.`);
 
-  const subject = `Friday reminder — Run Health Check + Send Update · ${project.name || 'Project'}`;
+  const subject = 'Friday Reminder - Run Health Check + Send Update';
   const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;color:#1F2937;">
     <div style="background:#1F1A47;color:#fff;padding:18px 22px;border-radius:8px 8px 0 0;">
       <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;opacity:.8;">📅 Friday Reminder</div>
@@ -2048,29 +2048,37 @@ async function sendEmail({ to, cc, subject, html, attachments, fromName, project
       subject = `${prefix} ${subject || ''}`.trim();
     }
   }
+  // Strip any em/en dashes from the subject — they're prone to UTF-8 → Latin-1 corruption in email clients
+  subject = (subject || '').replace(/[—–]/g, '-').replace(/…/g, '...');
+
+  // RFC 2047 encode the subject so any remaining non-ASCII still renders correctly
+  const subjectHeader = /[^\x00-\x7F]/.test(subject)
+    ? '=?UTF-8?B?' + Buffer.from(subject, 'utf-8').toString('base64') + '?='
+    : subject;
+
   const gmail = getGmailClient();
   const fromHeader = fromName ? `"${fromName.replace(/"/g, '')}" <${fromEmail}>` : fromEmail;
   const toList = Array.isArray(to) ? to.join(', ') : to;
   const ccList = (cc && cc.length) ? (Array.isArray(cc) ? cc.join(', ') : cc) : '';
 
   // Build a MIME message. If attachments present, build multipart/mixed; else simple HTML.
+  // Body uses base64 encoding so multi-byte UTF-8 chars round-trip cleanly.
   const boundary = 'mox_bk_ai_' + Date.now();
+  const htmlB64 = Buffer.from(html || '', 'utf-8').toString('base64').replace(/(.{76})/g, '$1\r\n');
   let raw;
   if (attachments && attachments.length) {
-    const parts = [];
-    parts.push(`Content-Type: text/html; charset="UTF-8"\r\n`);
-    parts.push(`MIME-Version: 1.0\r\n`);
-    parts.push(`Content-Transfer-Encoding: 7bit\r\n\r\n`);
-    parts.push(html);
     let mimeBody =
       `From: ${fromHeader}\r\n` +
       `To: ${toList}\r\n` +
       (ccList ? `Cc: ${ccList}\r\n` : '') +
-      `Subject: ${subject}\r\n` +
+      `Subject: ${subjectHeader}\r\n` +
       `MIME-Version: 1.0\r\n` +
       `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n` +
       `--${boundary}\r\n` +
-      parts.join('') + `\r\n`;
+      `Content-Type: text/html; charset="UTF-8"\r\n` +
+      `MIME-Version: 1.0\r\n` +
+      `Content-Transfer-Encoding: base64\r\n\r\n` +
+      htmlB64 + `\r\n`;
     attachments.forEach(att => {
       mimeBody +=
         `--${boundary}\r\n` +
@@ -2087,15 +2095,15 @@ async function sendEmail({ to, cc, subject, html, attachments, fromName, project
       `From: ${fromHeader}\r\n` +
       `To: ${toList}\r\n` +
       (ccList ? `Cc: ${ccList}\r\n` : '') +
-      `Subject: ${subject}\r\n` +
+      `Subject: ${subjectHeader}\r\n` +
       `MIME-Version: 1.0\r\n` +
       `Content-Type: text/html; charset="UTF-8"\r\n` +
-      `Content-Transfer-Encoding: 7bit\r\n\r\n` +
-      html;
+      `Content-Transfer-Encoding: base64\r\n\r\n` +
+      htmlB64;
   }
 
   // Gmail expects URL-safe base64
-  const encoded = Buffer.from(raw).toString('base64')
+  const encoded = Buffer.from(raw, 'utf-8').toString('base64')
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
   await gmail.users.messages.send({
