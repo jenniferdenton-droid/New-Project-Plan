@@ -6584,13 +6584,21 @@ function maybeShowFridayReminder() {
   if (!banner) return;
   const dow = new Date().getDay(); // 0=Sun, 5=Fri, 6=Sat
   if (dow !== 5 && dow !== 6 && dow !== 0) { banner.style.display = 'none'; return; }
+
+  // Suppress the reminder entirely if the Health Check was already run today
+  const lastScan = project.pmAiLastScan;
+  if (lastScan && lastScan.at) {
+    const lastDay = new Date(lastScan.at).toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (lastDay === todayStr) {
+      banner.style.display = 'none';
+      return;
+    }
+  }
+
   const dayName = dow === 5 ? 'Friday' : dow === 6 ? 'Saturday' : 'Sunday';
   document.getElementById('fridayDayName').textContent = dayName;
-
-  // Only show if HC is missing or >5 days old
-  const lastScan = project.pmAiLastScan;
-  const stale = !lastScan || !lastScan.at || (Date.now() - new Date(lastScan.at).getTime()) > 5 * 86400000;
-  banner.style.display = stale ? 'block' : 'none';
+  banner.style.display = 'block';
 }
 
 async function sendLeadReminder() {
@@ -6959,7 +6967,7 @@ async function sendDashboardSnapshotEmail() {
   statusEl.style.color = 'var(--text-secondary)';
   try {
     const html = buildDashboardSnapshotHtml();
-    const subject = `Project Snapshot — ${project.name || 'Project'} — ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
+    const subject = 'End of Week Project Update';
     await aiCallApi('quick-send', { channel: 'email', subject, body: html, polish: false });
     statusEl.textContent = '✓ Dashboard snapshot emailed to all enabled recipients.';
     statusEl.style.color = 'var(--green)';
@@ -6993,7 +7001,7 @@ async function sendProjectUpdateEmail() {
   if (!project.pmAiLastScan) { showToast('Run the Health Check first.', 'error'); return; }
   const text = (document.getElementById('proj_update_text')?.value || '').trim();
   if (!text) { showToast('Generate the update first.', 'error'); return; }
-  const subject = `Project Update — ${project.name || 'Project'}`;
+  const subject = 'Project Update';
   setAiStatus('proj_update_status', '⏳ Sending email…');
   try {
     const esc = s => String(s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
