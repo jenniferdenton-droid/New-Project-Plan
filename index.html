@@ -910,6 +910,7 @@
     <button class="btn btn-secondary btn-sm" onclick="openPeopleModal()" title="Manage project team members">👥 People</button>
     <button class="btn btn-secondary btn-sm" onclick="openTaskTemplatesModal()" title="Load a pre-built task template pack">📋 Load Templates</button>
     <button class="btn btn-secondary btn-sm" onclick="openDocImportModal()" title="Paste a proposal to auto-extract tasks">📄 Import from Doc</button>
+    <button class="btn btn-sm" style="background:linear-gradient(135deg,#1F1A47,#6B4EFF);color:#fff;border:none;font-weight:700;" onclick="openPmAiModal()" title="AI scans the project for duplicates, gaps, and a health score">🤖 PM AI</button>
     <div style="flex:1;"></div>
     <button class="btn btn-teal" onclick="openCompleteProjectModal()" title="Open the project sign-off, launch checklist, and handoff/SOPs">✅ Complete Project →</button>
   </div>
@@ -2274,6 +2275,84 @@
   </div>
 </div>
 
+<!-- ═══ AI PROCESS FLOW BUILDER MODAL ═══ -->
+<div class="modal-overlay" id="flowBuilderModal">
+  <div class="modal" style="max-width:760px;max-height:92vh;overflow-y:auto;">
+    <div class="modal-header" style="background:linear-gradient(90deg,#F3E8FF,transparent);position:sticky;top:0;z-index:10;">
+      <div class="modal-title">🧩 AI Process Flow Builder</div>
+      <button class="close-btn" onclick="closeModal('flowBuilderModal')">✕</button>
+    </div>
+    <div style="padding:14px 22px 22px;">
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">
+        Walk through your process one step at a time. For each step: describe it, tag <strong>manual</strong> or <strong>automated</strong>, and Claude will surface risks/gaps to consider. The flowchart auto-generates as you go.
+      </p>
+
+      <!-- Existing steps list -->
+      <div style="background:var(--gray-light);border-radius:8px;padding:12px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;">Steps Captured</div>
+          <div id="fb_step_count" style="font-size:11px;color:var(--text-secondary);">0 steps</div>
+        </div>
+        <div id="fb_steps_list"></div>
+      </div>
+
+      <!-- Next-step input -->
+      <div style="background:#F3E8FF;border:2px solid var(--purple);border-radius:8px;padding:12px 14px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--purple);letter-spacing:.5px;display:block;margin-bottom:4px;">What's the <span id="fb_step_label">first</span> step?</label>
+        <input type="text" id="fb_step_input" placeholder="e.g. Provider signs the contract" style="font-size:14px;margin-bottom:8px;width:100%;" onkeydown="if(event.key==='Enter')analyzeFlowStep()">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:600;">
+            <input type="radio" name="fb_type" id="fb_type_manual" value="manual" checked> 🖐 Manual
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:600;">
+            <input type="radio" name="fb_type" id="fb_type_automated" value="automated"> ⚡ Automated
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:600;">
+            <input type="radio" name="fb_type" id="fb_type_hybrid" value="hybrid"> 🔄 Hybrid
+          </label>
+          <div style="flex:1;"></div>
+          <button class="btn btn-primary btn-sm" onclick="analyzeFlowStep()">🔍 Get AI Risks → Add Step</button>
+        </div>
+        <div id="fb_ai_suggestions" style="display:none;background:#fff;border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:12px;margin-top:6px;"></div>
+        <div id="fb_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
+      </div>
+
+      <!-- Action buttons -->
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="exportFlowMermaid()">🧩 Export Mermaid Diagram</button>
+        <button class="btn btn-secondary btn-sm" onclick="copyFlowAsText()">📋 Copy as Text</button>
+        <button class="btn btn-secondary btn-sm" onclick="resetFlowBuilder()">↩ Start Over</button>
+        <div style="flex:1;"></div>
+        <button class="btn btn-teal" onclick="completeFlowBuilder()">✓ Done — Save &amp; Close</button>
+      </div>
+
+      <!-- Mermaid preview -->
+      <div id="fb_mermaid_preview" style="margin-top:14px;display:none;background:#fff;border:1px solid var(--border);border-radius:6px;padding:14px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;margin-bottom:8px;">Flowchart Preview</div>
+        <pre id="fb_mermaid_code" style="font-family:monospace;font-size:11px;background:var(--gray-light);padding:10px;border-radius:4px;white-space:pre-wrap;"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PM AI HEALTH SCAN MODAL ═══ -->
+<div class="modal-overlay" id="pmAiModal">
+  <div class="modal" style="max-width:820px;max-height:92vh;overflow-y:auto;">
+    <div class="modal-header" style="background:linear-gradient(90deg,#1F1A47,#6B4EFF);color:#fff;position:sticky;top:0;z-index:10;">
+      <div class="modal-title" style="color:#fff;">🤖 PM AI — Project Health &amp; Task Assistance</div>
+      <button class="close-btn" onclick="closeModal('pmAiModal')" style="color:#fff;">✕</button>
+    </div>
+    <div style="padding:18px 22px 22px;">
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">
+        Claude scans the whole project: duplicate-looking tasks, missing owners or dates, stale items, capacity risks, and computes a health score.
+      </p>
+      <button class="btn btn-primary" style="width:100%;margin-bottom:14px;background:linear-gradient(135deg,#1F1A47,#6B4EFF);" onclick="runPmAiScan()">🔍 Run Health Scan</button>
+      <div id="pm_ai_status" style="font-size:12px;color:var(--text-secondary);min-height:18px;text-align:center;"></div>
+      <div id="pm_ai_findings" style="margin-top:14px;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ PRE-LAUNCH NUDGE MODAL ═══ -->
 <div class="modal-overlay" id="prelaunchNudgeModal">
   <div class="modal" style="max-width:520px;">
@@ -2302,6 +2381,12 @@
       <button class="close-btn" onclick="closeModal('completeProjectModal')">✕</button>
     </div>
     <div style="padding:18px 24px 28px;">
+
+      <!-- Gate notice -->
+      <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#92400E;">
+        <strong>⚠️ Please complete all tasks below — or mark them <em>Does Not Apply</em> — before you can close the project.</strong>
+        <div style="font-size:12px;margin-top:4px;font-weight:500;">Every required Launch Checklist item must be checked (or N/A) and the Handoff signed off. The "Close &amp; Complete Project" button at the bottom unlocks once you're cleared.</div>
+      </div>
 
       <!-- Status banner -->
       <div id="completeProjectStatusBanner" style="background:#F8FAFC;border-left:3px solid var(--teal);padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:13px;"></div>
@@ -2332,6 +2417,13 @@
       <!-- Handoff & SOPs section -->
       <div id="completeHandoffMount" style="border-top:2px solid var(--border);padding-top:16px;">
         <!-- Filled in dynamically by openCompleteProjectModal() -->
+      </div>
+
+      <!-- 🏁 Close & Complete the project -->
+      <div id="closeProjectSection" style="margin-top:24px;border-top:2px solid var(--border);padding-top:18px;">
+        <h3 style="font-size:15px;font-weight:800;color:var(--gray-dark);margin-bottom:8px;">🏁 Close &amp; Complete Project</h3>
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Once every launch checklist item is checked (or N/A) and the handoff is signed off, mark this project as closed. Captures a completion date for the record.</p>
+        <div id="closeProjectStatus"></div>
       </div>
     </div>
   </div>
@@ -2815,6 +2907,29 @@ Shared with:
 
 Notes / feedback received:
 `
+  },
+  {
+    id: 'process_flow_chart', name: 'Process Flow Chart + Risk Map', required: true, phase: 'prelaunch',
+    aiHelper: 'flowBuilder',
+    desc: 'A documented step-by-step process flow with manual/automated tagging and risks/gaps per step. Use the AI Flow Builder to walk through each step.',
+    example: `PROCESS FLOW CHART — Bookkeeping Provider Onboarding (example)
+
+STEP 1 — Provider signs contract  [MANUAL]
+   Risks: contract version mismatch, wrong pricing tier, no countersignature alert
+STEP 2 — Contract uploaded to Dropbox  [MANUAL]
+   Risks: wrong folder, no notification to PSM, file naming inconsistent
+STEP 3 — PSM creates account in Moxie  [MANUAL]
+   Risks: typos in name/email, missed feature flag, wrong tier assigned
+STEP 4 — Welcome email sent to provider  [AUTOMATED]
+   Risks: bounce, wrong template, missing CC for internal team
+STEP 5 — Kickoff call scheduled  [MANUAL]
+   Risks: scheduling conflicts, no calendar invite to PSM, no agenda attached
+STEP 6 — Account activated in HubSpot  [AUTOMATED]
+   Risks: sync delay, missing lifecycle stage update
+...
+
+The AI Flow Builder walks you through these one at a time and surfaces risks per step.`,
+    template: ''
   },
   {
     id: 'risk_review', name: 'Risk Review Completed', required: true,
@@ -3757,6 +3872,13 @@ async function createSlackChannelForProject(channelName, isPrivate) {
 function updateHeader() {
   document.getElementById('headerProjectName').textContent = project.name || 'No Project Open';
   const dueEl = document.getElementById('headerDue');
+  // Closed projects: show a green CLOSED badge in place of the due-date pill
+  if (project.status === 'Closed & Completed' && project.closedAt) {
+    const closed = new Date(project.closedAt + 'T00:00:00');
+    const fmt = closed.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+    dueEl.innerHTML = `<span style="background:#10B981;color:#fff;font-weight:800;font-size:11px;padding:4px 10px;border-radius:14px;letter-spacing:.5px;">✅ CLOSED &amp; COMPLETED · ${fmt}</span>`;
+    return;
+  }
   if (project.dueDate) {
     const due = new Date(project.dueDate + 'T00:00:00');
     const today = new Date(); today.setHours(0,0,0,0);
@@ -4968,8 +5090,8 @@ function setTaskOwner(taskId, value) {
   } else {
     t.owner = value;
   }
-  renderMilestones();
-  if (typeof renderTasks === 'function') renderTasks();
+  t.updatedAt = new Date().toISOString();
+  refreshAfterOwnerChange();
   triggerAutoSave();
 }
 
@@ -4983,9 +5105,21 @@ function setAiOwner(aiId, value) {
   } else {
     a.owner = value;
   }
-  renderMilestones();
-  if (typeof renderActionItems === 'function') renderActionItems();
+  a.updatedAt = new Date().toISOString();
+  refreshAfterOwnerChange();
   triggerAutoSave();
+}
+
+// Centralized refresh — call after ANY owner change so Plan, Workstreams,
+// owner dropdowns, owner filter, and dashboard stay in sync.
+function refreshAfterOwnerChange() {
+  if (typeof refreshOwnerDatalist === 'function')    refreshOwnerDatalist();
+  if (typeof refreshOwnerFilterOptions === 'function') refreshOwnerFilterOptions();
+  if (typeof renderMilestones === 'function')        renderMilestones();
+  if (typeof renderTasks === 'function')             renderTasks();
+  if (typeof renderActionItems === 'function')       renderActionItems();
+  if (typeof renderWorkstreams === 'function')       renderWorkstreams();
+  if (typeof updateDashboard === 'function')         updateDashboard();
 }
 
 // ── Move task / action item between phases (called from Plan view dropdowns) ──
@@ -5554,6 +5688,7 @@ function addActionItem() {
   document.getElementById('newAiDue').value='';
   document.getElementById('newAiPriority').value='Medium';
   renderActionItems();
+  if (typeof refreshAfterOwnerChange === 'function') refreshAfterOwnerChange();
   triggerAutoSave();
 }
 
@@ -5567,6 +5702,12 @@ function updateAiField(id, field, value) {
       if (value === 'Done' && !ai.completedAt) ai.completedAt = new Date().toISOString();
       if (value !== 'Done') ai.completedAt = null;
     }
+  }
+  // Owner change → fully refresh workstreams + owner pickers
+  if (field === 'owner') {
+    if (typeof refreshAfterOwnerChange === 'function') refreshAfterOwnerChange();
+    triggerAutoSave();
+    return;
   }
   // Re-render so past-due badges + priority color updates
   if (field === 'dueDate' || field === 'priority' || field === 'status') {
@@ -5818,8 +5959,13 @@ function updateTaskField(id, field, value) {
     }
   }
   if (field === 'status' && value === 'At Risk') { if (!task.flaggedRisk) {} }
+  // If owner changed, fully refresh workstreams + owner pickers (otherwise tasks land in wrong team)
+  if (field === 'owner') {
+    if (typeof refreshAfterOwnerChange === 'function') refreshAfterOwnerChange();
+    triggerAutoSave();
+    return;
+  }
   // Re-render the Plan view so past-due / "Xd overdue" badges recompute
-  // when dueDate or status changes. Skip for owner/notes to keep cursor in place.
   if (field === 'dueDate' || field === 'status' || field === 'flaggedRisk') {
     if (typeof renderMilestones === 'function') renderMilestones();
     if (typeof renderTasks === 'function')      renderTasks();
@@ -5889,10 +6035,279 @@ function buildLaunchChecklist() {
   renderPrelaunchOnSetup();
 }
 
+// ═══════════════════════════════════════════════════════
+// AI PROCESS FLOW BUILDER — guided step-by-step capture
+// ═══════════════════════════════════════════════════════
+function openFlowBuilder() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  if (!project.processFlow) project.processFlow = { steps: [], updatedAt: null };
+  if (!Array.isArray(project.processFlow.steps)) project.processFlow.steps = [];
+  renderFlowBuilderSteps();
+  document.getElementById('flowBuilderModal').classList.add('open');
+  setTimeout(() => document.getElementById('fb_step_input')?.focus(), 200);
+}
+
+function renderFlowBuilderSteps() {
+  const steps = (project.processFlow && project.processFlow.steps) || [];
+  const list  = document.getElementById('fb_steps_list');
+  const count = document.getElementById('fb_step_count');
+  const label = document.getElementById('fb_step_label');
+  count.textContent = steps.length + ' step' + (steps.length !== 1 ? 's' : '');
+  label.textContent = steps.length === 0 ? 'first' : 'next';
+  if (!steps.length) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;padding:6px;">No steps yet. Describe step 1 below to start.</div>';
+    return;
+  }
+  list.innerHTML = steps.map((s, idx) => {
+    const icon = s.type === 'automated' ? '⚡' : s.type === 'hybrid' ? '🔄' : '🖐';
+    const color = s.type === 'automated' ? '#1565C0' : s.type === 'hybrid' ? '#9C27B0' : '#827717';
+    const risksHtml = (s.risks || []).map(r => `<li style="margin:2px 0;font-size:11px;">${escHtml(r)}</li>`).join('');
+    return `<div style="background:#fff;border:1px solid var(--border);border-left:3px solid ${color};border-radius:6px;padding:8px 10px;margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="background:${color};color:#fff;font-weight:800;font-size:11px;padding:3px 8px;border-radius:10px;">${idx+1}</span>
+        <span style="font-weight:600;font-size:13px;flex:1;">${icon} ${escHtml(s.text || '')}</span>
+        <span style="font-size:10px;color:${color};font-weight:700;text-transform:uppercase;">${escHtml(s.type || 'manual')}</span>
+        <button class="btn-icon" onclick="removeFlowStep(${idx})" title="Remove step" style="font-size:13px;color:var(--text-secondary);">✕</button>
+      </div>
+      ${risksHtml ? `<ul style="margin:6px 0 0 24px;padding-left:8px;color:var(--text-secondary);">${risksHtml}</ul>` : ''}
+    </div>`;
+  }).join('');
+  buildFlowMermaid();
+}
+
+function removeFlowStep(idx) {
+  if (!project.processFlow || !Array.isArray(project.processFlow.steps)) return;
+  if (!confirm('Remove this step? Later steps will renumber.')) return;
+  project.processFlow.steps.splice(idx, 1);
+  renderFlowBuilderSteps();
+  triggerAutoSave();
+}
+
+async function analyzeFlowStep() {
+  const inp = document.getElementById('fb_step_input');
+  const text = (inp.value || '').trim();
+  if (!text) { showToast('Describe the step first.', 'error'); return; }
+  const type = document.querySelector('input[name="fb_type"]:checked')?.value || 'manual';
+  const status = document.getElementById('fb_status');
+  const sugBox = document.getElementById('fb_ai_suggestions');
+  status.textContent = '⏳ Claude is analyzing risks for this step…';
+  status.style.color = 'var(--text-secondary)';
+  sugBox.style.display = 'none';
+  try {
+    const r = await aiCallApi('analyze-flow-step', {
+      stepText: text,
+      stepType: type,
+      priorSteps: (project.processFlow && project.processFlow.steps) || [],
+    });
+    const risks = r.risks || [];
+    const nextSuggestion = r.suggestedNext || '';
+    // Show the risks, then add the step to the list (user can edit/remove)
+    sugBox.innerHTML = `
+      <div style="font-weight:700;color:var(--purple);margin-bottom:4px;">🛡 AI-detected risks / gaps for this step:</div>
+      <ul style="margin:0 0 8px 18px;color:var(--gray-dark);">
+        ${risks.length ? risks.map(rk => `<li style="margin:2px 0;">${escHtml(rk)}</li>`).join('') : '<li style="color:var(--text-secondary);font-style:italic;">No specific risks detected.</li>'}
+      </ul>
+      ${nextSuggestion ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;"><strong>💡 Next step suggestion:</strong> ${escHtml(nextSuggestion)}</div>` : ''}
+    `;
+    sugBox.style.display = 'block';
+
+    // Persist the step
+    if (!project.processFlow) project.processFlow = { steps: [] };
+    project.processFlow.steps.push({ text, type, risks, addedAt: new Date().toISOString() });
+    project.processFlow.updatedAt = new Date().toISOString();
+    triggerAutoSave();
+
+    // Reset the input for the next step + suggest the next prompt
+    inp.value = nextSuggestion || '';
+    renderFlowBuilderSteps();
+    if (typeof renderPrelaunchOnSetup === 'function') renderPrelaunchOnSetup();
+    status.textContent = `✓ Added step ${project.processFlow.steps.length}. Describe the next step below.`;
+    status.style.color = 'var(--green)';
+    setTimeout(() => inp.focus(), 150);
+  } catch (e) {
+    status.textContent = '✗ ' + e.message;
+    status.style.color = 'var(--red)';
+  }
+}
+
+function buildFlowMermaid() {
+  const steps = (project.processFlow && project.processFlow.steps) || [];
+  if (!steps.length) return '';
+  const lines = ['flowchart TD'];
+  steps.forEach((s, idx) => {
+    const safe = (s.text || '').replace(/[\[\]"`]/g, '').slice(0, 60);
+    const shape = s.type === 'automated' ? '({{' + safe + '}})' : s.type === 'hybrid' ? '[/' + safe + '/]' : '[' + safe + ']';
+    lines.push(`  S${idx}${shape}`);
+    if (idx > 0) lines.push(`  S${idx-1} --> S${idx}`);
+    (s.risks || []).slice(0, 2).forEach((rk, ri) => {
+      const rsafe = (rk || '').replace(/[\[\]"`]/g, '').slice(0, 50);
+      lines.push(`  R${idx}_${ri}((!  ${rsafe})):::risk`);
+      lines.push(`  S${idx} -.-> R${idx}_${ri}`);
+    });
+  });
+  lines.push('  classDef risk fill:#FEE2E2,stroke:#991B1B,color:#991B1B,font-size:10px;');
+  const code = lines.join('\n');
+  const pre = document.getElementById('fb_mermaid_code');
+  if (pre) pre.textContent = code;
+  document.getElementById('fb_mermaid_preview').style.display = steps.length ? 'block' : 'none';
+  return code;
+}
+
+function exportFlowMermaid() {
+  const code = buildFlowMermaid();
+  if (!code) { showToast('Add at least one step first.', 'error'); return; }
+  navigator.clipboard.writeText(code).then(() => showToast('Mermaid diagram copied — paste into Process Flow tab or Mermaid Live editor.'));
+}
+
+function copyFlowAsText() {
+  const steps = (project.processFlow && project.processFlow.steps) || [];
+  if (!steps.length) { showToast('Add at least one step first.', 'error'); return; }
+  const text = steps.map((s, idx) => {
+    const tag = (s.type || 'manual').toUpperCase();
+    const risks = (s.risks || []).map(r => '   • ' + r).join('\n');
+    return `STEP ${idx+1} — ${s.text}  [${tag}]${risks ? '\n   Risks:\n' + risks : ''}`;
+  }).join('\n\n');
+  navigator.clipboard.writeText(text).then(() => showToast('Flow copied as text.'));
+}
+
+function resetFlowBuilder() {
+  if (!confirm('Clear all steps and start over? This cannot be undone.')) return;
+  project.processFlow = { steps: [], updatedAt: new Date().toISOString() };
+  renderFlowBuilderSteps();
+  triggerAutoSave();
+}
+
+function completeFlowBuilder() {
+  const steps = (project.processFlow && project.processFlow.steps) || [];
+  if (steps.length < 3) {
+    if (!confirm(`Only ${steps.length} step(s) captured. Are you sure you're done?`)) return;
+  }
+  // Mark the checklist item complete
+  const item = (project.launchChecklist || []).find(i => i.id === 'process_flow_chart');
+  if (item) {
+    item.checked = true;
+    item.notes = (item.notes || '') + `\nAI Flow Builder · ${steps.length} steps · ${new Date().toISOString().split('T')[0]}`;
+  }
+  closeModal('flowBuilderModal');
+  if (typeof renderPrelaunchOnSetup === 'function') renderPrelaunchOnSetup();
+  if (typeof renderCloseProjectSection === 'function') renderCloseProjectSection();
+  triggerAutoSave();
+  showToast(`✓ Flow saved (${steps.length} steps). Marked Process Flow Chart as complete.`);
+}
+
+// ═══════════════════════════════════════════════════════
+// PM AI — HEALTH SCAN + DUPLICATE DETECTION
+// ═══════════════════════════════════════════════════════
+function openPmAiModal() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  document.getElementById('pm_ai_findings').innerHTML = '<div style="font-size:12px;color:var(--text-secondary);text-align:center;padding:20px;">Click <strong>🔍 Run Health Scan</strong> to start.</div>';
+  document.getElementById('pm_ai_status').textContent = '';
+  document.getElementById('pmAiModal').classList.add('open');
+}
+
+async function runPmAiScan() {
+  if (!hasProject) return;
+  const statusEl = document.getElementById('pm_ai_status');
+  const findingsEl = document.getElementById('pm_ai_findings');
+  statusEl.textContent = '⏳ Scanning project (~15s)…';
+  statusEl.style.color = 'var(--text-secondary)';
+  findingsEl.innerHTML = '';
+  try {
+    const r = await aiCallApi('pm-ai-scan', {});
+    renderPmAiFindings(r);
+    statusEl.textContent = `✓ Scanned · ${r.elapsedMs || 0}ms`;
+    statusEl.style.color = 'var(--green)';
+    // Stamp the dashboard health
+    project.pmAiLastScan = {
+      at: new Date().toISOString(),
+      healthScore: r.healthScore,
+      duplicateCount: (r.duplicates || []).length,
+      gapCount: (r.gaps || []).length,
+    };
+    triggerAutoSave();
+    if (typeof updateDashboard === 'function') updateDashboard();
+  } catch (e) {
+    statusEl.textContent = '✗ ' + e.message;
+    statusEl.style.color = 'var(--red)';
+  }
+}
+
+function renderPmAiFindings(r) {
+  const el = document.getElementById('pm_ai_findings');
+  const health = r.healthScore || 0;
+  const healthColor = health >= 80 ? '#10B981' : health >= 60 ? '#F59E0B' : '#DC2626';
+  const healthBg    = health >= 80 ? '#D1FAE5' : health >= 60 ? '#FEF3C7' : '#FEE2E2';
+  const healthLabel = health >= 80 ? 'Healthy' : health >= 60 ? 'Watch' : 'At risk';
+
+  const dups = r.duplicates || [];
+  const gaps = r.gaps || [];
+  const sugs = r.suggestions || [];
+
+  el.innerHTML = `
+    <!-- Health score header -->
+    <div style="background:${healthBg};border:2px solid ${healthColor};border-radius:10px;padding:16px 20px;margin-bottom:14px;display:flex;align-items:center;gap:16px;">
+      <div style="font-size:36px;font-weight:900;color:${healthColor};line-height:1;">${health}</div>
+      <div style="flex:1;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:${healthColor};letter-spacing:1px;">Health Score · ${healthLabel}</div>
+        <div style="font-size:13px;color:${healthColor};margin-top:2px;">${escHtml(r.healthSummary || '')}</div>
+      </div>
+    </div>
+
+    <!-- Duplicates -->
+    <div style="margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:800;color:var(--gray-dark);margin-bottom:6px;">🔁 Possible Duplicate Tasks (${dups.length})</div>
+      ${dups.length ? dups.map((d, idx) => `
+        <div style="background:#fff;border:1px solid #F59E0B;border-left:3px solid #F59E0B;border-radius:6px;padding:10px 12px;margin-bottom:6px;font-size:12px;">
+          <div style="font-weight:600;color:#92400E;margin-bottom:3px;">${escHtml(d.reason || 'Similar wording')}</div>
+          ${(d.ids || []).map(id => {
+            const t = (project.tasks || []).find(x => x.id === id);
+            return t ? `<div style="color:var(--gray-dark);font-size:11px;margin:2px 0;">• <strong>#${id}</strong> ${escHtml(t.task || '')} — ${escHtml(t.owner || 'no owner')}</div>` : '';
+          }).join('')}
+          ${d.recommendation ? `<div style="font-size:11px;color:var(--purple);margin-top:4px;font-style:italic;">${escHtml(d.recommendation)}</div>` : ''}
+        </div>
+      `).join('') : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;">No duplicates detected.</div>'}
+    </div>
+
+    <!-- Gaps -->
+    <div style="margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:800;color:var(--gray-dark);margin-bottom:6px;">⚠️ Gaps &amp; Issues (${gaps.length})</div>
+      ${gaps.length ? gaps.map(g => `
+        <div style="background:#fff;border:1px solid var(--border);border-left:3px solid var(--red);border-radius:6px;padding:8px 10px;margin-bottom:4px;font-size:12px;">
+          <strong>${escHtml(g.type || 'Issue')}:</strong> ${escHtml(g.message || '')}
+          ${g.count ? `<span style="color:var(--red);font-weight:700;"> (${g.count})</span>` : ''}
+        </div>
+      `).join('') : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;">No gaps detected.</div>'}
+    </div>
+
+    <!-- Suggested actions -->
+    <div>
+      <div style="font-size:12px;font-weight:800;color:var(--gray-dark);margin-bottom:6px;">💡 Suggested Actions</div>
+      ${sugs.length ? `<ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.6;color:var(--gray-dark);">
+        ${sugs.map(s => `<li style="margin:3px 0;">${escHtml(s)}</li>`).join('')}
+      </ul>` : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;">No specific recommendations.</div>'}
+    </div>
+  `;
+}
+
 // ── PRE-LAUNCH NUDGE on app load ──
+// Suppress the nudge entirely once all 3 prelaunch items are checked or marked N/A.
+// We also remember a "permanently dismissed" flag on the project so a closed project
+// or one whose pre-launch was already cleared once never re-prompts.
 function maybeShowPrelaunchNudge() {
   if (!hasProject) return;
   if (window._prelaunchDismissedThisSession) return;
+  // 100% complete? Never nudge — also mark a permanent flag so we never re-nudge.
+  if (typeof prelaunchComplete === 'function' && prelaunchComplete()) {
+    if (project && !project.prelaunchCleared) {
+      project.prelaunchCleared = true;
+      project.prelaunchClearedAt = new Date().toISOString();
+      try { triggerAutoSave(); } catch (e) {}
+    }
+    return;
+  }
+  // If a prior session already cleared pre-launch, don't nag even if data drifts
+  if (project && project.prelaunchCleared) return;
+
   const items = getPrelaunchItems();
   if (!items.length) return;
   const open = items.filter(i => !i.checked && !i.na);
@@ -5938,14 +6353,114 @@ function openCompleteProjectModal() {
     try { loadHandoff(); } catch (e) { console.warn('loadHandoff during modal open:', e); }
   }
 
+  // Render the close-project section (status + button if eligible)
+  renderCloseProjectSection();
+
   document.getElementById('completeProjectModal').classList.add('open');
+}
+
+// Check if everything's done so we can let the user close the project
+function isProjectReadyToClose() {
+  // 1) Pre-launch must be cleared
+  if (!prelaunchComplete()) return { ready: false, reason: 'Pre-launch checklist still has open items.' };
+  // 2) Every LAUNCH-phase required item must be checked or N/A
+  const launchItems = getLaunchItems();
+  const openRequired = launchItems.filter(i => i.required && !i.checked && !i.na);
+  if (openRequired.length > 0) {
+    return { ready: false, reason: `${openRequired.length} required launch item${openRequired.length>1?'s':''} still open: ${openRequired.slice(0,3).map(i=>i.name).join(', ')}${openRequired.length>3?'…':''}` };
+  }
+  // 3) Handoff checklist (5 steps) must be cleared — keys per updateHandoffStatus()
+  const handoffSteps = ['walkthrough','docs','stakeholders','signedByPM','signedByOwner'];
+  const hand = (project.handoff && project.handoff.checklist) || {};
+  const openHand = handoffSteps.filter(k => !hand[k]);
+  if (openHand.length > 0) {
+    return { ready: false, reason: `Handoff checklist has ${openHand.length} unchecked step${openHand.length>1?'s':''}.` };
+  }
+  return { ready: true, reason: '' };
+}
+
+// Render the close-project status / button (or completed banner if already closed)
+function renderCloseProjectSection() {
+  const section = document.getElementById('closeProjectStatus');
+  if (!section) return;
+
+  // Already closed?
+  if (project.status === 'Closed & Completed' && project.closedAt) {
+    const fmt = new Date(project.closedAt + 'T00:00:00').toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+    section.innerHTML = `
+      <div style="background:#D1FAE5;border:2px solid #10B981;border-radius:8px;padding:16px 18px;">
+        <div style="font-size:16px;font-weight:800;color:#065F46;margin-bottom:4px;">✅ Closed &amp; Completed</div>
+        <div style="font-size:13px;color:#065F46;">Closed on <strong>${escHtml(fmt)}</strong>${project.closedBy ? ' by <strong>' + escHtml(project.closedBy) + '</strong>' : ''}</div>
+        ${project.closedNote ? `<div style="font-size:12px;color:#047857;margin-top:8px;font-style:italic;">"${escHtml(project.closedNote)}"</div>` : ''}
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px;font-size:11px;" onclick="reopenProject()">↩ Reopen Project</button>
+      </div>`;
+    return;
+  }
+
+  const check = isProjectReadyToClose();
+  if (!check.ready) {
+    section.innerHTML = `
+      <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:12px 14px;font-size:12px;color:#92400E;">
+        🔒 <strong>Not ready to close yet.</strong> ${escHtml(check.reason)}
+      </div>`;
+    return;
+  }
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  section.innerHTML = `
+    <div style="background:#ECFDF5;border:2px solid #10B981;border-radius:8px;padding:14px 16px;">
+      <div style="font-size:14px;font-weight:800;color:#065F46;margin-bottom:8px;">🎉 Everything is done — ready to close this project.</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">
+        <div style="flex:1;min-width:160px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Completion Date</label>
+          <input type="date" id="closeProjectDate" value="${todayStr}" style="font-size:13px;">
+        </div>
+        <div style="flex:2;min-width:200px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Closing note (optional)</label>
+          <input type="text" id="closeProjectNote" placeholder="e.g. Launched on schedule, handoff to PSM team complete." style="font-size:13px;">
+        </div>
+      </div>
+      <button class="btn btn-primary" style="background:#065F46;width:100%;" onclick="markProjectClosed()">🏁 Close &amp; Complete Project</button>
+    </div>`;
+}
+
+function markProjectClosed() {
+  if (!hasProject) return;
+  const dateEl = document.getElementById('closeProjectDate');
+  const noteEl = document.getElementById('closeProjectNote');
+  const date = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
+  if (!date) { showToast('Pick a completion date.', 'error'); return; }
+  if (!confirm(`Close & complete "${project.name || 'project'}" on ${date}?\n\nYou can reopen it later if needed.`)) return;
+  project.status = 'Closed & Completed';
+  project.closedAt = date;
+  project.closedBy = ''; // (could pre-fill from settings or env)
+  project.closedNote = noteEl ? noteEl.value.trim() : '';
+  project.closedTimestamp = new Date().toISOString();
+  renderCloseProjectSection();
+  if (typeof updateHeader === 'function')    updateHeader();
+  if (typeof updateDashboard === 'function') updateDashboard();
+  triggerAutoSave();
+  showToast(`✅ Project closed on ${date}.`);
+}
+
+function reopenProject() {
+  if (!confirm('Reopen this project? The completion date will be cleared.')) return;
+  project.status = '';
+  project.closedAt = '';
+  project.closedNote = '';
+  project.closedTimestamp = '';
+  renderCloseProjectSection();
+  if (typeof updateHeader === 'function')    updateHeader();
+  if (typeof updateDashboard === 'function') updateDashboard();
+  triggerAutoSave();
+  showToast('Project reopened.');
 }
 
 // ── PHASE HELPERS ────────────────────────────────────────
 // Pre-launch items (must finish before work starts):
 //   Project Proposal, Stakeholder Alignment Confirmed, Project Plan Created & Shared
 // Everything else is a "launch" item (shown when user clicks Complete Project).
-const PRELAUNCH_IDS = ['proposal', 'stakeholder_align', 'project_plan'];
+const PRELAUNCH_IDS = ['proposal', 'stakeholder_align', 'project_plan', 'process_flow_chart'];
 function isPrelaunchItem(item) {
   if (!item) return false;
   if (item.phase === 'prelaunch') return true;
@@ -5978,12 +6493,20 @@ function renderPrelaunchOnSetup() {
 
   container.innerHTML = items.map(item => {
     const isNA = !!item.na;
+    const flowBuilderBtn = item.aiHelper === 'flowBuilder'
+      ? `<button class="cl-template-btn" onclick="openFlowBuilder()" style="background:var(--purple);color:#fff;border-color:var(--purple);font-weight:700;">🤖 Build with AI</button>`
+      : '';
+    const flowSummary = (item.id === 'process_flow_chart' && project.processFlow && Array.isArray(project.processFlow.steps) && project.processFlow.steps.length)
+      ? `<div style="margin-top:6px;font-size:11px;color:var(--purple);font-weight:600;">✓ ${project.processFlow.steps.length} step(s) captured · ${project.processFlow.steps.filter(s=>s.type==='automated').length} automated, ${project.processFlow.steps.filter(s=>s.type==='manual').length} manual</div>`
+      : '';
     return `<div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;${isNA?'opacity:.45;':''}">
       <input type="checkbox" ${item.checked && !isNA?'checked':''} ${isNA?'disabled':''} onchange="toggleChecklist('${item.id}', this.checked); renderPrelaunchOnSetup();" style="margin-top:3px;">
       <div style="flex:1;">
         <div style="font-weight:600;font-size:13px;color:var(--gray-dark);">${escHtml(item.name)} <span class="tag tag-required" style="margin-left:6px;">Required</span></div>
         <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">${escHtml(item.desc || '')}</div>
+        ${flowSummary}
         <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+          ${flowBuilderBtn}
           ${item.example ? `<button class="cl-template-btn" onclick="toggleClPanel('${item.id}','example')">💡 Example</button>` : ''}
           ${item.template ? `<button class="cl-template-btn" onclick="toggleClPanel('${item.id}','tmpl')">📋 Template</button>` : ''}
           <button class="cl-template-btn" onclick="toggleClPanel('${item.id}','notes')" style="border-color:var(--teal);color:var(--teal);">📝 Notes${item.notes?' ✓':''}</button>
@@ -6117,6 +6640,13 @@ function toggleChecklist(id, checked) {
   renderLaunchChecklist();
   // Keep the Pre-Launch section on Project Setup in sync
   if (typeof renderPrelaunchOnSetup === 'function') renderPrelaunchOnSetup();
+  // Live-update the Close Project section so the button unlocks when ready
+  if (typeof renderCloseProjectSection === 'function') renderCloseProjectSection();
+  // Mark pre-launch as permanently cleared the moment all 3 items are done
+  if (typeof prelaunchComplete === 'function' && prelaunchComplete() && !project.prelaunchCleared) {
+    project.prelaunchCleared = true;
+    project.prelaunchClearedAt = new Date().toISOString();
+  }
   updateDashboard();
   triggerAutoSave();
   // Final handoff step → open the Complete Project modal (where Handoff & SOPs lives)
@@ -6132,6 +6662,8 @@ function toggleChecklistNA(id) {
   item.na = !item.na;
   if (item.na) item.checked = false; // uncheck when marking N/A
   renderLaunchChecklist();
+  if (typeof renderPrelaunchOnSetup === 'function') renderPrelaunchOnSetup();
+  if (typeof renderCloseProjectSection === 'function') renderCloseProjectSection();
   updateDashboard();
   triggerAutoSave();
 }
@@ -6963,14 +7495,24 @@ function updateDashboard() {
     { num: flaggedRisks, label: 'Open Risks',        color: '--red'    },
     { num: launchDone + '/' + launchTotal, label: 'Launch Checklist', color: '--teal' },
   ];
-  if (pastDueCount > 0) statCards.splice(2, 0, { num: pastDueCount, label: 'Past Due', color: '--red', pulse: true });
+  // PM AI Health card — only shown after the first PM AI scan
+  if (project.pmAiLastScan && typeof project.pmAiLastScan.healthScore === 'number') {
+    const h = project.pmAiLastScan.healthScore;
+    statCards.unshift({
+      num: h,
+      label: 'PM AI Health · click to scan',
+      color: h >= 80 ? '--green' : h >= 60 ? '--orange' : '--red',
+      onclick: 'openPmAiModal()',
+    });
+  }
+  if (pastDueCount > 0) statCards.splice(statCards.length - 1, 0, { num: pastDueCount, label: 'Past Due', color: '--red', pulse: true });
   if (openAIs > 0)      statCards.push({ num: openAIs, label: 'Open Action Items', color: '--orange' });
   if (msTotal > 0)      statCards.push({ num: msDone + '/' + msTotal, label: 'Milestones', color: '--purple' });
 
   // Render RAG
   renderRagStatus();
   document.getElementById('dashStats').innerHTML = statCards.map(s => `
-    <div class="stat-card" style="${s.pulse ? 'border:2px solid var(--red);background:#FFF5F5;' : ''}">
+    <div class="stat-card" style="${s.pulse ? 'border:2px solid var(--red);background:#FFF5F5;' : ''}${s.onclick ? 'cursor:pointer;' : ''}" ${s.onclick ? `onclick="${s.onclick}"` : ''}>
       <div class="stat-num" style="color:var(${s.color});">${s.num}</div>
       <div class="stat-label" style="${s.pulse ? 'color:var(--red);font-weight:700;' : ''}">${s.label}</div>
     </div>
@@ -8943,6 +9485,8 @@ function updateHandoffStatus() {
   let color = pct === 100 ? 'var(--green)' : pct >= 60 ? 'var(--orange)' : 'var(--red)';
   let status = pct === 100 ? '✅ Handoff complete' : pct >= 60 ? '🟡 In progress' : '🔴 Not started';
   el.innerHTML = `<strong style="color:${color};">${status}</strong> — ${done}/${items.length} steps complete (${pct}%)`;
+  // Refresh the Close Project section so the button unlocks when handoff finishes
+  if (typeof renderCloseProjectSection === 'function') renderCloseProjectSection();
 }
 
 // ── SOP management
