@@ -1341,6 +1341,104 @@ Now write the update.`;
 }
 
 // ════════════════════════════════════════════════════════════════
+// SEND LEAD REMINDER — Friday "don't forget to run health check + send update"
+// ════════════════════════════════════════════════════════════════
+async function sendLeadReminder({ project, settings, fbProjectId }) {
+  const t0 = Date.now();
+  const leadEmail = (project.leadEmail || '').trim();
+  const leadName = (project.lead || '').trim() || 'Project Lead';
+  if (!leadEmail) throw new Error('Project Lead Email not set on Project Setup tab.');
+
+  const projectUrl = (fbProjectId)
+    ? `https://moxie-ops-project-plans.vercel.app/#${fbProjectId}`
+    : '';
+  const lastScan = project.pmAiLastScan;
+  const lastWhen = lastScan && lastScan.at
+    ? new Date(lastScan.at).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })
+    : 'never';
+  const daysAgo = lastScan && lastScan.at
+    ? Math.round((Date.now() - new Date(lastScan.at).getTime()) / 86400000)
+    : null;
+  const staleText = daysAgo === null ? 'No health check has been run yet.' : (daysAgo > 7 ? `It's been ${daysAgo} days since the last health check.` : `Last health check was ${lastWhen}.`);
+
+  const subject = `Friday reminder — Run Health Check + Send Update · ${project.name || 'Project'}`;
+  const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;color:#1F2937;">
+    <div style="background:#1F1A47;color:#fff;padding:18px 22px;border-radius:8px 8px 0 0;">
+      <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;opacity:.8;">📅 Friday Reminder</div>
+      <div style="font-size:20px;font-weight:800;margin-top:4px;">${escapeHtmlServer(project.name || 'Project')}</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:18px 22px;border-radius:0 0 8px 8px;">
+      <p style="font-size:14px;margin:0 0 12px 0;">Hi ${escapeHtmlServer(leadName.split(' ')[0])} —</p>
+      <p style="font-size:13px;line-height:1.6;margin:0 0 14px 0;">Quick heads-up to close out the week strong:</p>
+      <ol style="font-size:13px;line-height:1.7;margin:0 0 16px 18px;padding:0;">
+        <li><strong>🩺 Run a Project Health Check</strong> — surfaces duplicates, gaps, and gives an AI-graded health score. ${escapeHtmlServer(staleText)}</li>
+        <li><strong>📣 Send the Project Update</strong> — dashboard snapshot to your stakeholders + Slack channel.</li>
+      </ol>
+      ${projectUrl ? `<div style="text-align:center;margin:16px 0;">
+        <a href="${projectUrl}" style="display:inline-block;background:#6B4EFF;color:#fff;text-decoration:none;font-weight:700;padding:10px 22px;border-radius:6px;font-size:13px;">→ Open Project Tracker</a>
+      </div>` : ''}
+      <p style="font-size:12px;color:#64748B;margin:12px 0 0 0;line-height:1.5;">It takes ~3 minutes: Run Health Check → make any quick fixes → click "Send Dashboard Snapshot to Email" + "Send to Slack Channel". Done.</p>
+    </div>
+  </div>`;
+
+  const result = { emailSent: false, slackSent: false, errors: [] };
+
+  // 1) Email the lead
+  try {
+    await sendEmail({
+      to: [leadEmail],
+      subject,
+      html,
+      fromName: settings?.fromName || 'Moxie Project Tracker',
+      projectName: project.name || '',
+    });
+    result.emailSent = true;
+  } catch (e) {
+    result.errors.push('Email: ' + e.message);
+  }
+
+  // 2) Slack DM the lead — look up by email
+  const botToken = process.env.SLACK_BOT_TOKEN;
+  if (botToken) {
+    try {
+      const lookRes = await fetch(`https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(leadEmail)}`, {
+        headers: { 'Authorization': `Bearer ${botToken}` },
+      });
+      const lookJson = await lookRes.json().catch(() => ({}));
+      if (lookJson.ok && lookJson.user && lookJson.user.id) {
+        const dmText = `:wave: *Friday reminder for ${project.name || 'your project'}*\n\n` +
+          `Two quick things to close the week:\n` +
+          `1. :stethoscope: Run a Project Health Check (${staleText.toLowerCase()})\n` +
+          `2. :loudspeaker: Send the project update to your team\n\n` +
+          (projectUrl ? `<${projectUrl}|→ Open Project Tracker>` : '');
+        const dmRes = await fetch('https://slack.com/api/chat.postMessage', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Authorization': `Bearer ${botToken}`,
+          },
+          body: JSON.stringify({ channel: lookJson.user.id, text: dmText, mrkdwn: true }),
+        });
+        const dmJson = await dmRes.json().catch(() => ({}));
+        if (dmJson.ok) result.slackSent = true;
+        else result.errors.push('Slack DM: ' + (dmJson.error || 'unknown'));
+      } else {
+        result.errors.push('Slack DM: lead email not found in workspace (' + (lookJson.error || 'no user') + ')');
+      }
+    } catch (e) {
+      result.errors.push('Slack DM: ' + e.message);
+    }
+  }
+
+  result.elapsedMs = Date.now() - t0;
+  return result;
+}
+
+function escapeHtmlServer(s) {
+  return String(s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+// ════════════════════════════════════════════════════════════════
 // ANALYZE FLOW STEP — risks / gaps / suggested next step
 // ════════════════════════════════════════════════════════════════
 async function analyzeFlowStep({ stepText, stepType, priorSteps, project }) {
@@ -2243,6 +2341,9 @@ module.exports = async (req, res) => {
         break;
       case 'project-update':
         result = await projectUpdate({ ...payload, project });
+        break;
+      case 'send-lead-reminder':
+        result = await sendLeadReminder({ ...payload, project, settings, fbProjectId });
         break;
       case 'analyze-flow-step':
         result = await analyzeFlowStep({ ...payload, project });
