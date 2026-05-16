@@ -337,7 +337,12 @@
 
   <div id="dashboardContent" style="display:none;">
     <!-- Dashboard top toolbar -->
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <!-- Inline project due-date editor -->
+      <div style="display:flex;align-items:center;gap:6px;background:var(--gray-light);padding:5px 10px;border-radius:6px;font-size:12px;">
+        <span style="font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;font-size:10px;">Project Due</span>
+        <input type="date" id="dashProjectDueDate" onchange="updateProjectDueDate(this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:#fff;">
+      </div>
       <button class="btn btn-primary" style="background:linear-gradient(135deg,#6B4EFF,#9061F9);" onclick="openProjectUpdateModal()" title="Generate a weekly-style project status update — edit then send to email or Slack">📣 Project Update &amp; Outreach</button>
       <button class="btn btn-teal" onclick="openCompleteProjectModal()" title="Open the project sign-off, launch checklist, and handoff/SOPs">✅ Complete Project →</button>
     </div>
@@ -2274,7 +2279,7 @@
   </div>
 </div>
 
-<!-- ═══ PROJECT UPDATE & OUTREACH ═══ -->
+<!-- ═══ PROJECT UPDATE & OUTREACH (AI-powered, health-check gated) ═══ -->
 <div class="modal-overlay" id="projectUpdateModal">
   <div class="modal" style="max-width:820px;max-height:92vh;overflow-y:auto;">
     <div class="modal-header" style="background:linear-gradient(90deg,#F3E8FF,transparent);position:sticky;top:0;z-index:10;">
@@ -2282,31 +2287,58 @@
       <button class="close-btn" onclick="closeModal('projectUpdateModal')">✕</button>
     </div>
     <div style="padding:14px 22px 22px;">
-      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">
-        One-click status update grounded in your live project data: completed in the last 7 days, upcoming in the next 7 days, past-due items, and active risks. Edit the text below, then send to your email list and Slack channel.
-      </p>
 
-      <!-- Cadence picker (lets user pick weekly/daily preview) -->
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;">Format:</label>
-        <select id="proj_update_kind" style="font-size:13px;">
-          <option value="weekly" selected>Weekly status</option>
-          <option value="daily">Daily digest</option>
-          <option value="brief">Meeting brief</option>
-        </select>
-        <button class="btn btn-primary btn-sm" onclick="buildProjectUpdate()" style="font-size:12px;">🔄 Generate</button>
+      <!-- STEP 1 — Required: Run Health Check first -->
+      <div id="proj_update_step1" style="background:#FEF3C7;border:2px solid #F59E0B;border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <span style="font-size:18px;">1️⃣</span>
+          <div style="font-weight:800;color:#92400E;font-size:14px;">Run a Project Health Check first</div>
+        </div>
+        <div style="font-size:12px;color:#92400E;margin-bottom:10px;">
+          The AI uses your latest Health Check results — score, duplicates, gaps, risks — to write an accurate update. <strong>This step is required.</strong>
+        </div>
+        <div id="proj_update_healthstatus" style="font-size:12px;color:#92400E;margin-bottom:10px;"></div>
+        <button class="btn btn-primary" style="background:linear-gradient(135deg,#1F1A47,#6B4EFF);" onclick="runHealthCheckFromUpdateModal()">🩺 Run Health Check Now</button>
       </div>
 
-      <textarea id="proj_update_text" rows="14"
-        placeholder="Click Generate to draft the update. Edit anything below before sending."
-        style="width:100%;font-size:12px;line-height:1.55;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:12px;border:1px solid var(--border);border-radius:6px;background:var(--gray-light);"></textarea>
+      <!-- STEP 2 — Generate the update (locked until Step 1 passes) -->
+      <div id="proj_update_step2" style="opacity:.5;pointer-events:none;background:var(--gray-light);border-radius:8px;padding:14px 16px;margin-bottom:12px;transition:opacity .3s;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span style="font-size:18px;">2️⃣</span>
+          <div style="font-weight:800;color:var(--gray-dark);font-size:14px;">Generate the update</div>
+        </div>
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+          Claude reads your plan + the Health Check results and writes a polished update: completed last week, pipeline next week, past due, health score, risks &amp; blockers.
+        </p>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;">Audience:</label>
+          <select id="proj_update_audience" style="font-size:13px;">
+            <option value="team" selected>Team — operational</option>
+            <option value="leadership">Leadership — exec summary</option>
+            <option value="stakeholders">External stakeholders — high-level</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="buildProjectUpdateAi()" style="font-size:12px;">🔮 Generate with Claude</button>
+        </div>
 
-      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-        <button class="btn btn-secondary btn-sm" onclick="copyAiOutput('proj_update_text')">📋 Copy</button>
-        <div style="flex:1;"></div>
-        <button class="btn btn-teal" onclick="sendProjectUpdateEmail()">📧 Send Email to All</button>
-        <button class="btn btn-primary" style="background:#4A154B;" onclick="sendProjectUpdateSlack()">💬 Send to Slack Channel</button>
+        <textarea id="proj_update_text" rows="14"
+          placeholder="Run the Health Check above, then click Generate. Edit anything below before sending."
+          style="width:100%;font-size:12px;line-height:1.55;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:12px;border:1px solid var(--border);border-radius:6px;background:#fff;"></textarea>
       </div>
+
+      <!-- STEP 3 — Send (locked until Step 2 has content) -->
+      <div id="proj_update_step3" style="opacity:.5;pointer-events:none;background:#ECFDF5;border-radius:8px;padding:14px 16px;transition:opacity .3s;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span style="font-size:18px;">3️⃣</span>
+          <div style="font-weight:800;color:#065F46;font-size:14px;">Send to team</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="copyAiOutput('proj_update_text')">📋 Copy</button>
+          <div style="flex:1;"></div>
+          <button class="btn btn-teal" onclick="sendProjectUpdateEmail()">📧 Send Email to All</button>
+          <button class="btn btn-primary" style="background:#4A154B;" onclick="sendProjectUpdateSlack()">💬 Send to Slack Channel</button>
+        </div>
+      </div>
+
       <div id="proj_update_status" style="font-size:11px;color:var(--text-secondary);margin-top:8px;min-height:14px;"></div>
     </div>
   </div>
@@ -6130,24 +6162,117 @@ function buildLaunchChecklist() {
   renderPrelaunchOnSetup();
 }
 
+// Update the whole project's due date from the dashboard toolbar
+function updateProjectDueDate(value) {
+  if (!hasProject) return;
+  const oldVal = project.dueDate || '(none)';
+  project.dueDate = value || '';
+  triggerAutoSave();
+  if (typeof updateHeader === 'function')      updateHeader();
+  if (typeof syncSetupForm === 'function')     syncSetupForm();
+  if (typeof updateDashboard === 'function')   updateDashboard();
+  showToast(`Project due date: ${oldVal} → ${value || '(cleared)'}`);
+}
+
 // ═══════════════════════════════════════════════════════
-// PROJECT UPDATE & OUTREACH — one-click status from dashboard
+// PROJECT UPDATE & OUTREACH — gated 3-step flow:
+//   1) Run Health Check  →  2) Generate with Claude  →  3) Send email/Slack
 // ═══════════════════════════════════════════════════════
 function openProjectUpdateModal() {
   if (!hasProject) { showToast('Open a project first.', 'error'); return; }
   document.getElementById('projectUpdateModal').classList.add('open');
-  // Auto-generate a draft on open so the textarea isn't empty
-  setTimeout(buildProjectUpdate, 120);
+  refreshProjectUpdateGates();
 }
 
-function buildProjectUpdate() {
-  if (!hasProject) return;
-  const kind = document.getElementById('proj_update_kind')?.value || 'weekly';
+function refreshProjectUpdateGates() {
+  const step2 = document.getElementById('proj_update_step2');
+  const step3 = document.getElementById('proj_update_step3');
+  const statusEl = document.getElementById('proj_update_healthstatus');
+  if (!step2 || !step3 || !statusEl) return;
+
+  const scan = project.pmAiLastScan;
+  if (scan && typeof scan.healthScore === 'number') {
+    step2.style.opacity = '1';
+    step2.style.pointerEvents = '';
+    const when = scan.at ? new Date(scan.at).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '';
+    const age = scan.at ? Math.round((Date.now() - new Date(scan.at).getTime()) / 86400000) : null;
+    const stale = age !== null && age > 7;
+    statusEl.innerHTML = `${stale ? '⚠️' : '✅'} <strong>Health score: ${scan.healthScore}/100</strong> · last checked ${when}${stale ? ' <span style="color:var(--red);">(stale &gt;7d — re-run recommended)</span>' : ''}`;
+    const txt = (document.getElementById('proj_update_text')?.value || '').trim();
+    if (txt.length > 0) {
+      step3.style.opacity = '1';
+      step3.style.pointerEvents = '';
+    } else {
+      step3.style.opacity = '.5';
+      step3.style.pointerEvents = 'none';
+    }
+  } else {
+    statusEl.innerHTML = '<strong>No health check on record yet.</strong> Click below to run one — required before generating an update.';
+    step2.style.opacity = '.5';
+    step2.style.pointerEvents = 'none';
+    step3.style.opacity = '.5';
+    step3.style.pointerEvents = 'none';
+  }
+}
+
+// Step 1 — run health check from inside this modal
+async function runHealthCheckFromUpdateModal() {
+  const statusEl = document.getElementById('proj_update_healthstatus');
+  statusEl.innerHTML = '⏳ Running health check + Slack scan (~20s)…';
   try {
-    const data = buildDigestData(kind);
-    const text = renderDigestText(data, kind);
-    document.getElementById('proj_update_text').value = text;
-    setAiStatus('proj_update_status', '✓ Draft built — edit then send.', 'var(--green)');
+    const r = await aiCallApi('pm-ai-scan', { lastScanAt: project.pmAiLastScan?.at || null });
+    window._pmAiLastFindings = r;
+    project.pmAiLastScan = {
+      at: new Date().toISOString(),
+      healthScore: r.healthScore,
+      duplicateCount: (r.duplicates || []).length,
+      gapCount: (r.gaps || []).length,
+    };
+    if (!Array.isArray(project.pmAiHistory)) project.pmAiHistory = [];
+    project.pmAiHistory.unshift({
+      at: project.pmAiLastScan.at,
+      healthScore: r.healthScore,
+      healthSummary: r.healthSummary || '',
+      duplicateCount: (r.duplicates || []).length,
+      gapCount: (r.gaps || []).length,
+      suggestions: r.suggestions || [],
+      duplicates: r.duplicates || [],
+      gaps: r.gaps || [],
+      slackCandidates: r.slackCandidates || null,
+    });
+    if (project.pmAiHistory.length > 10) project.pmAiHistory = project.pmAiHistory.slice(0, 10);
+
+    const h = r.healthScore;
+    const newStatus = h >= 80 ? 'Green' : h >= 60 ? 'Amber' : 'Red';
+    if (!project.ragStatus) project.ragStatus = {};
+    project.ragStatus.status = newStatus;
+    project.ragStatus.reason = r.healthSummary || `${h}/100 health score from AI scan`;
+    project.ragStatus.updatedAt = new Date().toISOString();
+    project.ragStatus.updatedBy = 'Project Health Check (AI)';
+
+    triggerAutoSave();
+    if (typeof updateDashboard === 'function') updateDashboard();
+    refreshProjectUpdateGates();
+  } catch (e) {
+    statusEl.innerHTML = '<span style="color:var(--red);">✗ ' + e.message + '</span>';
+  }
+}
+
+// Step 2 — Claude writes the update grounded in the latest health check
+async function buildProjectUpdateAi() {
+  if (!hasProject) return;
+  if (!project.pmAiLastScan) { showToast('Run the Health Check first.', 'error'); return; }
+  const audience = document.getElementById('proj_update_audience')?.value || 'team';
+  setAiStatus('proj_update_status', '⏳ Claude is drafting your update (~10s)…');
+  try {
+    const r = await aiCallApi('project-update', {
+      audience,
+      healthScan: project.pmAiLastScan,
+      lastScanFindings: window._pmAiLastFindings || null,
+    });
+    document.getElementById('proj_update_text').value = r.update || '';
+    setAiStatus('proj_update_status', '✓ Draft ready — edit anything before sending.', 'var(--green)');
+    refreshProjectUpdateGates();
   } catch (e) {
     setAiStatus('proj_update_status', '✗ ' + e.message, 'var(--red)');
   }
@@ -6155,29 +6280,16 @@ function buildProjectUpdate() {
 
 async function sendProjectUpdateEmail() {
   if (!hasProject) return;
+  if (!project.pmAiLastScan) { showToast('Run the Health Check first.', 'error'); return; }
   const text = (document.getElementById('proj_update_text')?.value || '').trim();
   if (!text) { showToast('Generate the update first.', 'error'); return; }
-  const kind = document.getElementById('proj_update_kind')?.value || 'weekly';
-  const subjectMap = {
-    weekly: `Weekly Update — ${project.name || 'Project'}`,
-    daily:  `Daily Update — ${project.name || 'Project'}`,
-    brief:  `Meeting Brief — ${project.name || 'Project'}`,
-  };
+  const subject = `Project Update — ${project.name || 'Project'}`;
   setAiStatus('proj_update_status', '⏳ Sending email…');
   try {
-    // Use the structured HTML renderer so the email looks polished
-    const data = buildDigestData(kind);
-    // Replace the rendered text with the user's edited version so any edits land in the email
-    // (We re-use renderDigestHtml structure but inject the textarea content as plain text.)
     const esc = s => String(s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
     const editedHtml = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.6;white-space:pre-wrap;color:#1F2937;">${esc(text)}</div>`;
-    await aiCallApi('quick-send', {
-      channel: 'email',
-      subject: subjectMap[kind] || `Project Update — ${project.name || 'Project'}`,
-      body: editedHtml,
-      polish: false,
-    });
-    setAiStatus('proj_update_status', '✓ Email sent to all recipients.', 'var(--green)');
+    await aiCallApi('quick-send', { channel: 'email', subject, body: editedHtml, polish: false });
+    setAiStatus('proj_update_status', '✓ Email sent to all enabled recipients.', 'var(--green)');
     showToast('Update emailed.');
   } catch (e) {
     setAiStatus('proj_update_status', '✗ Email failed: ' + e.message, 'var(--red)');
@@ -6186,16 +6298,15 @@ async function sendProjectUpdateEmail() {
 
 async function sendProjectUpdateSlack() {
   if (!hasProject) return;
+  if (!project.pmAiLastScan) { showToast('Run the Health Check first.', 'error'); return; }
   const text = (document.getElementById('proj_update_text')?.value || '').trim();
   if (!text) { showToast('Generate the update first.', 'error'); return; }
-  const kind = document.getElementById('proj_update_kind')?.value || 'weekly';
-  const title = kind === 'weekly' ? '📅 Weekly Update' : kind === 'daily' ? '🗓 Daily Update' : '📋 Meeting Brief';
   setAiStatus('proj_update_status', '⏳ Posting to Slack…');
   try {
     await aiCallApi('quick-send', {
       channel: 'slack',
       subject: '',
-      body: `*${title}* — *${project.name || 'Project'}*\n\n${text}`,
+      body: `*📣 Project Update — ${project.name || 'Project'}*\n\n${text}`,
       polish: false,
     });
     setAiStatus('proj_update_status', '✓ Posted to Slack channel.', 'var(--green)');
@@ -6385,11 +6496,13 @@ async function runPmAiScan() {
   if (!hasProject) return;
   const statusEl = document.getElementById('pm_ai_status');
   const findingsEl = document.getElementById('pm_ai_findings');
-  statusEl.textContent = '⏳ Scanning project (~15s)…';
+  statusEl.textContent = '⏳ Scanning project + Slack (~20s)…';
   statusEl.style.color = 'var(--text-secondary)';
   findingsEl.innerHTML = '';
   try {
-    const r = await aiCallApi('pm-ai-scan', {});
+    const r = await aiCallApi('pm-ai-scan', {
+      lastScanAt: project.pmAiLastScan?.at || null,
+    });
     // Stash full findings + history so we can show interactive controls + previews
     window._pmAiLastFindings = r;
     project.pmAiLastScan = {
@@ -6503,7 +6616,101 @@ function renderPmAiFindings(r) {
         ${sugs.map(s => `<li style="margin:3px 0;">${escHtml(s)}</li>`).join('')}
       </ul>` : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;">No specific recommendations.</div>'}
     </div>
+
+    ${renderSlackCandidatesBlock(r.slackCandidates)}
   `;
+}
+
+function renderSlackCandidatesBlock(sc) {
+  if (!sc) return '';
+  if (sc.error) {
+    return `<div style="margin-top:14px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:10px 12px;font-size:11px;color:#92400E;">
+      💬 Slack scan skipped: ${escHtml(sc.error)}
+    </div>`;
+  }
+  const ts = sc.tasks || [], ds = sc.decisions || [], rs = sc.risks || [];
+  if (!ts.length && !ds.length && !rs.length) {
+    return `<div style="margin-top:14px;font-size:12px;color:var(--text-secondary);font-style:italic;background:var(--gray-light);padding:8px 12px;border-radius:6px;">
+      💬 Scanned <strong>#${escHtml(sc.channel)}</strong> (${sc.messageCount} msgs over ${sc.daysScanned}d) — no new tasks, decisions, or risks to add.
+    </div>`;
+  }
+  const list = (arr, kind, color, key) => arr.length ? `
+    <div style="margin-bottom:8px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:${color};margin-bottom:4px;">${kind} (${arr.length})</div>
+      ${arr.map((item, idx) => `<label style="display:flex;align-items:flex-start;gap:6px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:4px;font-size:12px;cursor:pointer;">
+        <input type="checkbox" id="pm_slack_${key}_${idx}" checked style="margin-top:2px;">
+        <div style="flex:1;">
+          <div style="font-weight:600;">${escHtml(item.text || item.task || item.decision || item.risk || '')}</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${escHtml(item.owner || item.decidedBy || '')}${item.dueDate ? ' · due ' + escHtml(item.dueDate) : ''}${item.context ? ' · ' + escHtml(item.context) : ''}</div>
+        </div>
+      </label>`).join('')}
+    </div>` : '';
+  return `<div style="margin-top:14px;border:2px solid #4A154B;border-radius:8px;padding:12px 14px;background:#fff;">
+    <div style="font-size:12px;font-weight:800;color:#4A154B;margin-bottom:8px;">💬 From <strong>#${escHtml(sc.channel)}</strong> since last check · ${sc.messageCount} msgs scanned · ${sc.daysScanned}d</div>
+    <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Claude found these items in your project Slack channel that aren't in the plan yet. Check the ones you want and click Add.</div>
+    ${list(ts, 'Tasks', 'var(--purple)', 'tasks')}
+    ${list(ds, 'Decisions', '#1565C0', 'decisions')}
+    ${list(rs, 'Risks', 'var(--red)', 'risks')}
+    <div style="margin-top:6px;">
+      <button class="btn btn-primary btn-sm" style="background:#4A154B;font-size:11px;width:100%;" onclick='pmAiApplySlack(${JSON.stringify({tasks:ts,decisions:ds,risks:rs})})'>✓ Add Checked Items to Project</button>
+    </div>
+  </div>`;
+}
+
+function pmAiApplySlack(data) {
+  if (!data) return;
+  let added = 0;
+  (data.tasks || []).forEach((t, idx) => {
+    const cb = document.getElementById('pm_slack_tasks_' + idx);
+    if (!cb || !cb.checked) return;
+    project.tasks = project.tasks || [];
+    project.tasks.push({
+      id: (typeof taskIdCounter !== 'undefined' ? taskIdCounter++ : Date.now()),
+      milestoneId: null, category: '',
+      task: t.text || t.task || '',
+      owner: t.owner || '',
+      dueDate: t.dueDate || '',
+      status: 'Not Started',
+      notes: t.context ? ('From Slack: ' + t.context) : 'From Slack scan',
+      flaggedRisk: false, riskDetail: '',
+    });
+    added++;
+  });
+  (data.decisions || []).forEach((d, idx) => {
+    const cb = document.getElementById('pm_slack_decisions_' + idx);
+    if (!cb || !cb.checked) return;
+    project.decisions = project.decisions || [];
+    project.decisions.push({
+      id: (typeof decisionIdCounter !== 'undefined' ? decisionIdCounter++ : Date.now()),
+      decision: d.text || d.decision || '',
+      decidedBy: d.decidedBy || '',
+      date: d.date || new Date().toISOString().split('T')[0],
+      context: d.context || '',
+      source: 'PM AI Slack scan',
+    });
+    added++;
+  });
+  (data.risks || []).forEach((r, idx) => {
+    const cb = document.getElementById('pm_slack_risks_' + idx);
+    if (!cb || !cb.checked) return;
+    project.risks = project.risks || [];
+    project.risks.push({
+      id: (typeof riskIdCounter !== 'undefined' ? riskIdCounter++ : Date.now()),
+      linkedTaskId: null,
+      risk: r.text || r.risk || '',
+      owner: r.owner || '',
+      impact: r.impact || 'Med',
+      likelihood: r.likelihood || 'Med',
+      status: 'Open',
+      mitigation: r.mitigation || '',
+    });
+    added++;
+  });
+  if (typeof refreshAfterOwnerChange === 'function') refreshAfterOwnerChange();
+  if (typeof renderDecisions === 'function') renderDecisions();
+  if (typeof renderRisks === 'function') renderRisks();
+  triggerAutoSave();
+  showToast(`✓ Added ${added} item${added!==1?'s':''} from Slack scan.`);
 }
 
 // ── Duplicate-task actions ──
@@ -7796,6 +8003,9 @@ function updateDashboard() {
   document.getElementById('noProjectBanner').style.display = 'none';
   document.getElementById('dashboardContent').style.display = 'block';
   updateHeader();
+  // Sync inline due-date input
+  const dueInp = document.getElementById('dashProjectDueDate');
+  if (dueInp) dueInp.value = project.dueDate || '';
 
   const today = new Date(); today.setHours(0,0,0,0);
   const total = project.tasks.length;
