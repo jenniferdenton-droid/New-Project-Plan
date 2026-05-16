@@ -303,14 +303,11 @@
   <div class="header-meta">
     <span id="headerDue"></span>
     <button class="btn btn-secondary btn-sm" onclick="openMyProjects()" title="Switch between saved projects">📂 My Projects</button>
+    <button class="btn btn-sm" style="background:linear-gradient(135deg,#1F1A47,#6B4EFF);color:#fff;border:none;font-weight:700;" onclick="openPmAiModal()" title="AI scans the project for duplicate tasks, gaps, and a health score — recommended weekly">🩺 Project Health Check</button>
     <button class="btn btn-primary" onclick="openNewProjectModal()">＋ New Project</button>
     <button class="btn btn-teal btn-sm" id="shareLinkBtn" onclick="copyShareUrl()" title="Copy shareable link — anyone with this link sees the same live project" style="display:none;">🔗 Share Link</button>
     <button class="btn btn-teal btn-sm" onclick="sendPlanToTeam()" title="Email project status to all stakeholders">📧 Send to Team</button>
     <button class="btn btn-secondary btn-sm" onclick="openHelpModal()" title="How to use this tool">❓ Help</button>
-    <button class="btn btn-secondary btn-sm" onclick="openCloudSyncModal()" title="Connect to Firebase for live multi-user sync">☁️ Live Sync</button>
-    <button class="btn btn-secondary btn-sm" onclick="importProject()" title="Load a previously saved project JSON">⬆ Load</button>
-    <button class="btn btn-secondary btn-sm" onclick="exportProject()" title="Download project as JSON backup file">⬇ Export</button>
-    <button class="btn btn-secondary btn-sm" onclick="clearSavedProject()" title="Clear auto-saved data from this browser" style="color:var(--red);border-color:var(--red);">✕ Clear</button>
   </div>
 </div>
 
@@ -325,7 +322,6 @@
   <button class="tab-btn"        data-tab="links"       onclick="switchTab('links')">🔗 Links</button>
   <button class="tab-btn"        data-tab="setup"       onclick="switchTab('setup')">⚙️ Project Setup</button>
   <button class="tab-btn"        data-tab="budget"      onclick="switchTab('budget')">💰 Budget</button>
-  <button class="tab-btn"        data-tab="processflow" onclick="switchTab('processflow')">🧩 Process Flow</button>
 </div>
 
 <!-- ===================== DASHBOARD ===================== -->
@@ -907,10 +903,9 @@
 <div id="tab-milestones" class="tab-content">
   <!-- Plan toolbar -->
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-    <button class="btn btn-secondary btn-sm" onclick="openPeopleModal()" title="Manage project team members">👥 People</button>
+    <button class="btn btn-secondary btn-sm" onclick="openManagePeopleChooser()" title="Add/manage stakeholders or email recipients">👥 Manage People</button>
     <button class="btn btn-secondary btn-sm" onclick="openTaskTemplatesModal()" title="Load a pre-built task template pack">📋 Load Templates</button>
     <button class="btn btn-secondary btn-sm" onclick="openDocImportModal()" title="Paste a proposal to auto-extract tasks">📄 Import from Doc</button>
-    <button class="btn btn-sm" style="background:linear-gradient(135deg,#1F1A47,#6B4EFF);color:#fff;border:none;font-weight:700;" onclick="openPmAiModal()" title="AI scans the project for duplicates, gaps, and a health score">🤖 PM AI</button>
     <div style="flex:1;"></div>
     <button class="btn btn-teal" onclick="openCompleteProjectModal()" title="Open the project sign-off, launch checklist, and handoff/SOPs">✅ Complete Project →</button>
   </div>
@@ -1678,7 +1673,9 @@
 </div>
 
 <!-- ===================== PROCESS FLOW ===================== -->
-<div id="tab-processflow" class="tab-content">
+<!-- Process Flow tab removed from nav. Process flows are now built via AI Process Flow Builder
+     in the Pre-Launch Checklist. Hidden stub kept so any legacy refs don't error. -->
+<div id="tab-processflow" class="tab-content" style="display:none;">
   <!-- TOP BANNER -->
   <div style="background:linear-gradient(135deg,var(--purple-light),var(--teal-light));border-radius:var(--radius);padding:20px 24px;margin-bottom:20px;">
     <h2 style="font-size:17px;font-weight:700;color:var(--purple);margin-bottom:4px;">🧩 Process Flow Map</h2>
@@ -2275,6 +2272,29 @@
   </div>
 </div>
 
+<!-- ═══ MANAGE PEOPLE CHOOSER ═══ -->
+<div class="modal-overlay" id="managePeopleChooserModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">👥 Manage People</div>
+      <button class="close-btn" onclick="closeModal('managePeopleChooserModal')">✕</button>
+    </div>
+    <div style="padding:14px 22px 22px;">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">Pick where you want to manage people for this project:</p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="btn btn-primary" style="text-align:left;padding:14px 18px;" onclick="closeModal('managePeopleChooserModal'); switchTab('setup'); setTimeout(()=>document.getElementById('stakeholderGrid')?.scrollIntoView({behavior:'smooth'}), 200);">
+          <div style="font-size:14px;font-weight:700;margin-bottom:2px;">👥 Stakeholder Plan</div>
+          <div style="font-size:11px;font-weight:400;opacity:.9;">Add or edit POCs for each team (PSM, Sales, Ops, etc.) — these are the people responsible for project workstreams.</div>
+        </button>
+        <button class="btn btn-teal" style="text-align:left;padding:14px 18px;" onclick="closeModal('managePeopleChooserModal'); switchTab('aiassistant'); setTimeout(()=>{ if(typeof switchAiSubTab==='function') switchAiSubTab('settings'); setTimeout(()=>document.getElementById('ai_recipient_list')?.scrollIntoView({behavior:'smooth'}), 100); }, 100);">
+          <div style="font-size:14px;font-weight:700;margin-bottom:2px;">📧 Email Recipients &amp; Channels</div>
+          <div style="font-size:11px;font-weight:400;opacity:.9;">Add or toggle who gets project email updates. Stakeholder POCs auto-flow in; check/uncheck per send.</div>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ AI PROCESS FLOW BUILDER MODAL ═══ -->
 <div class="modal-overlay" id="flowBuilderModal">
   <div class="modal" style="max-width:760px;max-height:92vh;overflow-y:auto;">
@@ -2335,18 +2355,21 @@
   </div>
 </div>
 
-<!-- ═══ PM AI HEALTH SCAN MODAL ═══ -->
+<!-- ═══ PROJECT HEALTH CHECK MODAL ═══ -->
 <div class="modal-overlay" id="pmAiModal">
   <div class="modal" style="max-width:820px;max-height:92vh;overflow-y:auto;">
     <div class="modal-header" style="background:linear-gradient(90deg,#1F1A47,#6B4EFF);color:#fff;position:sticky;top:0;z-index:10;">
-      <div class="modal-title" style="color:#fff;">🤖 PM AI — Project Health &amp; Task Assistance</div>
+      <div class="modal-title" style="color:#fff;">🩺 Project Health Check — Duplicates, Gaps &amp; Health Score</div>
       <button class="close-btn" onclick="closeModal('pmAiModal')" style="color:#fff;">✕</button>
     </div>
     <div style="padding:18px 22px 22px;">
+      <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#92400E;">
+        <strong>📅 Recommended cadence:</strong> run this <strong>weekly</strong> to keep the project clean — duplicate tasks, missing owners or due dates, stale items, and capacity risks get surfaced before they bite.
+      </div>
       <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">
         Claude scans the whole project: duplicate-looking tasks, missing owners or dates, stale items, capacity risks, and computes a health score.
       </p>
-      <button class="btn btn-primary" style="width:100%;margin-bottom:14px;background:linear-gradient(135deg,#1F1A47,#6B4EFF);" onclick="runPmAiScan()">🔍 Run Health Scan</button>
+      <button class="btn btn-primary" style="width:100%;margin-bottom:14px;background:linear-gradient(135deg,#1F1A47,#6B4EFF);" onclick="runPmAiScan()">🔍 Run Health Check</button>
       <div id="pm_ai_status" style="font-size:12px;color:var(--text-secondary);min-height:18px;text-align:center;"></div>
       <div id="pm_ai_findings" style="margin-top:14px;"></div>
     </div>
@@ -3571,7 +3594,7 @@ function switchTab(name) {
   if (name === 'decisions')   renderDecisions();
   if (name === 'actions')     renderActionItems();
   if (name === 'budget')      renderBudget();
-  if (name === 'processflow') loadProcessFlow();
+  // Process Flow tab removed — content now lives in AI Flow Builder (pre-launch checklist)
   // Legacy proposal tab removed — Proposal Builder moved to AI Assistant > Drafts
   if (name === 'aiassistant') {
     aiLoadSettings();
@@ -6035,6 +6058,12 @@ function buildLaunchChecklist() {
   renderPrelaunchOnSetup();
 }
 
+// Manage People chooser — splits to Stakeholders or Email Recipients
+function openManagePeopleChooser() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  document.getElementById('managePeopleChooserModal').classList.add('open');
+}
+
 // ═══════════════════════════════════════════════════════
 // AI PROCESS FLOW BUILDER — guided step-by-step capture
 // ═══════════════════════════════════════════════════════
@@ -6200,7 +6229,7 @@ function completeFlowBuilder() {
 // ═══════════════════════════════════════════════════════
 function openPmAiModal() {
   if (!hasProject) { showToast('Open a project first.', 'error'); return; }
-  document.getElementById('pm_ai_findings').innerHTML = '<div style="font-size:12px;color:var(--text-secondary);text-align:center;padding:20px;">Click <strong>🔍 Run Health Scan</strong> to start.</div>';
+  document.getElementById('pm_ai_findings').innerHTML = '<div style="font-size:12px;color:var(--text-secondary);text-align:center;padding:20px;">Click <strong>🔍 Run Health Check</strong> to start.</div>';
   document.getElementById('pm_ai_status').textContent = '';
   document.getElementById('pmAiModal').classList.add('open');
 }
@@ -6541,7 +6570,8 @@ function renderLaunchChecklist() {
           ${!isNA && item.example ? `<button class="cl-template-btn" onclick="toggleClPanel('${item.id}','example')">💡 See Example</button>` : ''}
           ${!isNA && item.template ? `<button class="cl-template-btn" onclick="toggleClPanel('${item.id}','tmpl')">📋 Copy Template</button>` : ''}
           ${!isNA ? `<button class="cl-template-btn" onclick="toggleClPanel('${item.id}','notes')" style="border-color:var(--teal);color:var(--teal);">📝 Notes${item.notes ? ' ✓' : ''}</button>` : ''}
-          ${!isNA && item.finalStep ? `<button class="cl-template-btn" onclick="switchTab('handoff')" style="background:var(--purple);color:#fff;border-color:var(--purple);font-weight:700;">→ Open Handoff &amp; SOPs Tab</button>` : ''}
+          <!-- Handoff tab button removed — handoff content is now rendered inline below in this modal -->
+
           <button class="cl-template-btn" onclick="toggleChecklistNA('${item.id}')"
             style="${isNA ? 'background:var(--purple);color:#fff;border-color:var(--purple);' : 'border-color:#94A3B8;color:#64748B;'}">
             ${isNA ? '↩ Undo N/A' : 'Does Not Apply'}
@@ -7495,13 +7525,17 @@ function updateDashboard() {
     { num: flaggedRisks, label: 'Open Risks',        color: '--red'    },
     { num: launchDone + '/' + launchTotal, label: 'Launch Checklist', color: '--teal' },
   ];
-  // PM AI Health card — only shown after the first PM AI scan
+  // Project Health Check card — only shown after the first scan
   if (project.pmAiLastScan && typeof project.pmAiLastScan.healthScore === 'number') {
     const h = project.pmAiLastScan.healthScore;
+    const scanDate = project.pmAiLastScan.at ? new Date(project.pmAiLastScan.at) : null;
+    // Stale if more than 7 days since last scan
+    const stale = scanDate && (Date.now() - scanDate.getTime()) > 7 * 86400000;
+    const dateStr = scanDate ? scanDate.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
     statCards.unshift({
       num: h,
-      label: 'PM AI Health · click to scan',
-      color: h >= 80 ? '--green' : h >= 60 ? '--orange' : '--red',
+      label: stale ? `🩺 Health · stale (${dateStr}) — re-run` : `🩺 Health · ${dateStr} — click to re-run`,
+      color: stale ? '--orange' : h >= 80 ? '--green' : h >= 60 ? '--orange' : '--red',
       onclick: 'openPmAiModal()',
     });
   }
@@ -8038,7 +8072,7 @@ function importProject() {
         const data = JSON.parse(ev.target.result);
         // Strip meta fields, load into project state
         const { _version, _saved, ...loaded } = data;
-        Object.assign(project, loaded);
+        mergeProjectClean(loaded);
         hasProject = true;
         // Reset counters to avoid ID collisions
         taskIdCounter    = Math.max(0, ...project.tasks.map(t => t.id || 0)) + 1;
@@ -8067,6 +8101,19 @@ function importProject() {
     reader.readAsText(file);
   };
   input.click();
+}
+
+// Merge loaded project data into the global `project` WITHOUT leaking stale
+// per-project fields from the previously-open project (Object.assign only merges,
+// it doesn't delete keys that aren't in the new data). Called by every project-load path.
+function mergeProjectClean(loaded) {
+  const transientFields = [
+    'status', 'closedAt', 'closedBy', 'closedNote', 'closedTimestamp',
+    'prelaunchCleared', 'prelaunchClearedAt',
+    'pmAiLastScan',
+  ];
+  transientFields.forEach(k => { if (!(k in (loaded || {}))) delete project[k]; });
+  Object.assign(project, loaded || {});
 }
 
 function showToast(msg, type = 'success') {
@@ -10999,7 +11046,7 @@ function startFirebaseListener() {
       loaded.decisions = loaded.decisions.filter(d => !_tombstonedDecisionIds.has(d.id));
     }
 
-    Object.assign(project, loaded);
+    mergeProjectClean(loaded);
     hasProject = true;
     // BUGFIX: Anchor local project ID to the Firebase project ID so we
     // don't mint a new local entry on every save. This prevents the
@@ -11048,7 +11095,7 @@ function startFirebaseListener() {
     // Local data only exists if they previously had a project, in which case hasProject
     // is already true above and we wouldn't be here.
     isRemoteUpdate = true;
-    Object.assign(project, loaded);
+    mergeProjectClean(loaded);
     hasProject = true;
     // BUGFIX: anchor local ID to Firebase ID so doAutoSave doesn't mint a new entry
     if (fbProjectId) currentProjectId = fbProjectId;
@@ -11167,29 +11214,72 @@ function renderMyProjectsList() {
     </div>`;
     return;
   }
-  container.innerHTML = ids.map(id => {
-    const p = all[id];
+
+  // Split into Active & Open vs Closed & Completed
+  const isClosed = p => p && p.status === 'Closed & Completed';
+  const activeIds = ids.filter(id => !isClosed(all[id]));
+  const closedIds = ids.filter(id =>  isClosed(all[id]));
+
+  // Closed projects sort by closedAt (most recent first), falling back to savedAt
+  closedIds.sort((a, b) => {
+    const ca = (all[a].closedAt || all[a]._savedAt || '');
+    const cb = (all[b].closedAt || all[b]._savedAt || '');
+    return cb.localeCompare(ca);
+  });
+
+  function renderRow(id, p, opts = {}) {
     const isActive = id === currentProjectId;
     const savedStr = p._savedAt ? formatTimeAgo(new Date(p._savedAt)) : 'unknown';
     const tasks = (p.tasks || []).length;
     const done  = (p.tasks || []).filter(t => t.status === 'Done').length;
-    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:0.5px solid var(--border);">
+    const closedBadge = opts.closed && p.closedAt
+      ? `<span style="font-size:10px;background:#D1FAE5;color:#065F46;padding:2px 7px;border-radius:10px;font-weight:700;">✅ CLOSED ${new Date(p.closedAt+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'})}</span>`
+      : '';
+    const dueLine = !opts.closed && p.dueDate
+      ? `<div style="font-size:11px;color:var(--purple);margin-top:2px;">Due: ${new Date(p.dueDate + 'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>`
+      : '';
+    const noteLine = opts.closed && p.closedNote
+      ? `<div style="font-size:11px;color:var(--text-secondary);font-style:italic;margin-top:3px;">"${escapeHtml(p.closedNote)}"</div>`
+      : '';
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border);${opts.closed ? 'opacity:.85;' : ''}">
       <div style="flex:1;min-width:0;">
-        <div style="font-size:14px;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:8px;">
+        <div style="font-size:14px;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           ${escapeHtml(p.name || 'Untitled')}
           ${isActive ? '<span style="font-size:10px;background:var(--purple-light);color:var(--purple);padding:2px 7px;border-radius:10px;font-weight:700;">OPEN</span>' : ''}
+          ${closedBadge}
         </div>
         <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">
           ${p.lead ? 'Lead: ' + escapeHtml(p.lead) + ' · ' : ''}${tasks} task${tasks !== 1 ? 's' : ''} (${done} done) · Saved ${savedStr}
         </div>
-        ${p.dueDate ? `<div style="font-size:11px;color:var(--purple);margin-top:2px;">Due: ${new Date(p.dueDate + 'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>` : ''}
+        ${dueLine}
+        ${noteLine}
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;">
         ${!isActive ? `<button class="btn btn-sm btn-primary" onclick="loadProjectById('${id}')">Open</button>` : '<span style="font-size:12px;color:var(--teal);font-weight:600;">● Active</span>'}
         <button class="btn btn-sm btn-secondary" style="color:var(--red);border-color:var(--red);" onclick="deleteProjectById('${id}')">Delete</button>
       </div>
     </div>`;
-  }).join('');
+  }
+
+  const sectionHeader = (label, count, color) => `
+    <div style="display:flex;align-items:center;gap:8px;margin:14px 0 4px 0;">
+      <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:${color};">${label}</span>
+      <span style="font-size:11px;color:var(--text-secondary);">${count}</span>
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+    </div>`;
+
+  let html = '';
+  html += sectionHeader('🟢 Active & Open', activeIds.length, 'var(--teal)');
+  html += activeIds.length
+    ? activeIds.map(id => renderRow(id, all[id])).join('')
+    : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;padding:6px 0;">No active projects.</div>';
+
+  html += sectionHeader('✅ Closed & Completed', closedIds.length, '#10B981');
+  html += closedIds.length
+    ? closedIds.map(id => renderRow(id, all[id], { closed: true })).join('')
+    : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;padding:6px 0;">No closed projects yet — complete a project to move it here.</div>';
+
+  container.innerHTML = html;
 }
 
 function loadProjectById(id) {
@@ -11197,7 +11287,7 @@ function loadProjectById(id) {
   const data = all[id];
   if (!data) { showToast('Project not found.', 'error'); return; }
   const { _savedAt, _projectId, ...loaded } = data;
-  Object.assign(project, loaded);
+  mergeProjectClean(loaded);
   hasProject = true;
   currentProjectId = id;
   taskIdCounter    = Math.max(1, ...project.tasks.map(t => t.id   || 0)) + 1;
@@ -11329,7 +11419,7 @@ function autoLoadOnStart() {
       const data = all[id];
       const { _savedAt, _projectId, _version, ...loaded } = data;
       if (!loaded.name) return false;
-      Object.assign(project, loaded);
+      mergeProjectClean(loaded);
       hasProject = true;
       currentProjectId = id;
       taskIdCounter    = Math.max(1, ...project.tasks.map(t => t.id   || 0)) + 1;
