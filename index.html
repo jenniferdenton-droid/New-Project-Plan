@@ -2965,7 +2965,7 @@ const STATUSES = ['Not Started', 'In Progress', 'At Risk', 'Done', 'Blocked', 'O
 
 const LAUNCH_CHECKLIST_TEMPLATE = [
   {
-    id: 'proposal', name: 'Project Proposal', required: true, phase: 'prelaunch',
+    id: 'proposal', name: 'Project Proposal', required: true, phase: 'prelaunch', aiHelper: 'proposalBuilder',
     desc: 'Document outlining project scope, goals, stakeholders, timeline, and resources needed.',
     example: `PROJECT PROPOSAL — [Project Name]
 Date: [Date] | Lead: [Name] | Due Date: [Date]
@@ -7853,6 +7853,9 @@ function renderPrelaunchOnSetup() {
     const flowBuilderBtn = item.aiHelper === 'flowBuilder'
       ? `<button class="cl-template-btn" onclick="openFlowBuilder()" style="background:var(--purple);color:#fff;border-color:var(--purple);font-weight:700;">🤖 Build with AI</button>`
       : '';
+    const proposalBtn = item.aiHelper === 'proposalBuilder'
+      ? `<button class="cl-template-btn" onclick="openProposalBuilderFromChecklist()" style="background:var(--purple);color:#fff;border-color:var(--purple);font-weight:700;">🤖 Use AI to Generate Project Proposal</button>`
+      : '';
     const flowSummary = (item.id === 'process_flow_chart' && project.processFlow && Array.isArray(project.processFlow.steps) && project.processFlow.steps.length)
       ? `<div style="margin-top:6px;font-size:11px;color:var(--purple);font-weight:600;">✓ ${project.processFlow.steps.length} step(s) captured · ${project.processFlow.steps.filter(s=>s.type==='automated').length} automated, ${project.processFlow.steps.filter(s=>s.type==='manual').length} manual</div>`
       : '';
@@ -7864,6 +7867,7 @@ function renderPrelaunchOnSetup() {
         ${flowSummary}
         <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
           ${flowBuilderBtn}
+          ${proposalBtn}
           ${item.example ? `<button class="cl-template-btn" onclick="toggleClPanel('${item.id}','example')">💡 Example</button>` : ''}
           ${item.template ? `<button class="cl-template-btn" onclick="toggleClPanel('${item.id}','tmpl')">📋 Template</button>` : ''}
           <button class="cl-template-btn" onclick="toggleClPanel('${item.id}','notes')" style="border-color:var(--teal);color:var(--teal);">📝 Notes${item.notes?' ✓':''}</button>
@@ -10026,6 +10030,41 @@ async function generateProposal() {
     setAiStatus('ai_proposal_status', '✗ ' + e.message, 'var(--red)');
   }
 }
+// Open AI Proposal Builder from the pre-launch checklist with context pre-filled,
+// then auto-fire generation so the user sees a draft immediately.
+function openProposalBuilderFromChecklist() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  switchTab('aiassistant');
+  setTimeout(() => {
+    if (typeof switchAiSubTab === 'function') switchAiSubTab('drafts');
+    setTimeout(() => {
+      const ctxEl = document.getElementById('ai_proposal_context');
+      if (ctxEl) {
+        // Pre-fill from the project's setup data so Claude has the right framing
+        const lines = [];
+        if (project.description) lines.push('Project description: ' + project.description);
+        if (project.lead)        lines.push('Project lead: ' + project.lead);
+        if (project.dueDate)     lines.push('Target launch: ' + project.dueDate);
+        if (project.externalTeam && project.externalDetail) lines.push('External team: ' + project.externalDetail);
+        // Pull included stakeholder teams to make the personnel section accurate
+        const teams = STAKEHOLDER_LIST
+          .filter(s => project.stakeholders?.[s.key]?.included)
+          .map(s => {
+            const sd = project.stakeholders[s.key];
+            return sd.contactName ? `${s.label} (${sd.contactName})` : s.label;
+          });
+        if (teams.length) lines.push('Teams involved: ' + teams.join(', '));
+        ctxEl.value = lines.join('\n');
+      }
+      // Scroll into view + auto-fire the generation
+      const card = document.getElementById('ai_proposal_result');
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showToast('Generating proposal — this takes ~15-30s…');
+      if (typeof generateProposal === 'function') generateProposal();
+    }, 180);
+  }, 180);
+}
+
 function saveProposalLinkPrompt() {
   const url = prompt('Paste the Google Docs URL for this proposal:');
   if (!url) return;
