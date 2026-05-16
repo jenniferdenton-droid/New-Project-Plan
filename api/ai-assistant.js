@@ -1138,6 +1138,141 @@ Now propose new candidate tasks, decisions, and risks. Return JSON only.`;
   };
 }
 
+// ════════════════════════════════════════════════════════════════
+// PM AI SCAN — health score + duplicate detection + gap analysis
+// ════════════════════════════════════════════════════════════════
+async function pmAiScan({ project }) {
+  const t0 = Date.now();
+  const snapshot = buildProjectSnapshot(project);
+
+  // Fast deterministic pass: find candidate duplicate pairs via token-overlap similarity
+  const tasks = (project.tasks || []).filter(t => t.task && t.task.trim());
+  const tokenize = s => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 3);
+  const candidatePairs = [];
+  for (let i = 0; i < tasks.length; i++) {
+    const tiTokens = new Set(tokenize(tasks[i].task));
+    if (tiTokens.size < 2) continue;
+    for (let j = i + 1; j < tasks.length; j++) {
+      const tjTokens = new Set(tokenize(tasks[j].task));
+      if (tjTokens.size < 2) continue;
+      let overlap = 0;
+      tiTokens.forEach(w => { if (tjTokens.has(w)) overlap++; });
+      const sim = overlap / Math.min(tiTokens.size, tjTokens.size);
+      if (sim >= 0.6) candidatePairs.push({ a: tasks[i].id, b: tasks[j].id, sim });
+    }
+  }
+
+  // Deterministic gap signals
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayMs = today.getTime();
+  const tasksNoOwner   = tasks.filter(t => !t.owner || !t.owner.trim());
+  const tasksNoDueDate = tasks.filter(t => !t.dueDate && t.status !== 'Done');
+  const pastDue        = tasks.filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() < todayMs);
+  const blocked        = tasks.filter(t => t.status === 'Blocked');
+  const openCritAIs    = (project.actionItems || []).filter(a => a.status !== 'Done' && a.priority === 'Critical');
+  const openHighRisks  = (project.risks || []).filter(r => (r.status === 'Open' || !r.status) && (r.impact || '').toLowerCase() === 'high');
+
+  const system = `You are an experienced PM auditing a project tracker. Analyze the project state and return ONLY valid JSON in this exact shape:
+{
+  "healthScore": 0-100 (overall project health),
+  "healthSummary": "one-sentence explanation",
+  "duplicates": [
+    { "ids": [<task id>, <task id>], "reason": "<why these look like duplicates>", "recommendation": "<merge|keep both|clarify>" }
+  ],
+  "gaps": [
+    { "type": "<category>", "message": "<specific issue>", "count": <optional number> }
+  ],
+  "suggestions": ["<actionable next step>", ...]
+}
+
+Rules for healthScore:
+- 80-100 (Healthy): on track, few past-due/blockers, owners assigned, risks managed.
+- 60-79 (Watch): some past-due or blockers, gaps in ownership/dates, manageable risks.
+- 0-59 (At risk): many past-due, multiple blockers/critical AIs, missing owners, high-impact risks unmitigated.
+
+Rules for duplicates:
+- Consider the candidate pairs the user-side similarity check identified, AND any others you spot.
+- Only include true duplicates (same work, redundant) — NOT related tasks that should both exist.
+- Recommendation: "merge" (keep one), "keep both" (false positive — explain), "clarify" (rename to distinguish).
+
+Rules for gaps: surface ONLY real issues — be specific and quantify ("8 tasks have no owner", "3 tasks past due >7 days", etc.).
+
+Suggestions: 3-6 prioritized, actionable next-step bullets the PM can take TODAY.`;
+
+  const user = `PROJECT SNAPSHOT:
+\`\`\`json
+${JSON.stringify(snapshot, null, 2)}
+\`\`\`
+
+CANDIDATE DUPLICATE PAIRS (token-overlap >= 60%):
+${JSON.stringify(candidatePairs, null, 2)}
+
+DETERMINISTIC SIGNALS:
+- Tasks without owner: ${tasksNoOwner.length}
+- Tasks without due date (not Done): ${tasksNoDueDate.length}
+- Past-due tasks: ${pastDue.length}
+- Blocked tasks: ${blocked.length}
+- Critical open action items: ${openCritAIs.length}
+- High-impact open risks: ${openHighRisks.length}
+
+Now run the PM audit. Return ONLY the JSON object — no prose.`;
+
+  const raw = await callClaude(system, user, 2500);
+  const parsed = parseJsonSafe(raw, {
+    healthScore: 60, healthSummary: 'Unable to parse AI response.',
+    duplicates: [], gaps: [], suggestions: [],
+  });
+
+  return {
+    healthScore: Math.max(0, Math.min(100, parseInt(parsed.healthScore, 10) || 60)),
+    healthSummary: parsed.healthSummary || '',
+    duplicates: Array.isArray(parsed.duplicates) ? parsed.duplicates : [],
+    gaps: Array.isArray(parsed.gaps) ? parsed.gaps : [],
+    suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+    candidatePairs,
+    elapsedMs: Date.now() - t0,
+  };
+}
+
+// ════════════════════════════════════════════════════════════════
+// ANALYZE FLOW STEP — risks / gaps / suggested next step
+// ════════════════════════════════════════════════════════════════
+async function analyzeFlowStep({ stepText, stepType, priorSteps, project }) {
+  const t0 = Date.now();
+  if (!stepText || !stepText.trim()) throw new Error('Step description required.');
+
+  const system = `You are a process designer helping a project manager build a step-by-step process flow chart for a MedSpa SaaS company called Moxie.
+
+For the given step, surface 3-5 specific risks, gaps, or failure modes that could occur. Be concrete — name the EXACT failure (e.g., "PSM forgets to set feature flag" not "configuration error").
+
+Also propose what the most likely NEXT step in the process would be, given the prior steps.
+
+Respond with ONLY valid JSON in this shape:
+{
+  "risks": ["<concrete risk 1>", "<concrete risk 2>", ...],
+  "suggestedNext": "<one-line suggestion for the next step, OR empty if you can't tell>"
+}`;
+
+  const user = `PROJECT: ${project.name || 'Unnamed'}
+${project.description ? 'DESCRIPTION: ' + project.description : ''}
+
+PRIOR STEPS IN THE FLOW:
+${(priorSteps || []).map((s, i) => `${i+1}. ${s.text} [${s.type || 'manual'}]`).join('\n') || '(none yet — this is the first step)'}
+
+CURRENT STEP TO ANALYZE:
+"${stepText}" [${stepType || 'manual'}]
+
+Return the JSON now.`;
+
+  const raw = await callClaude(system, user, 800);
+  const parsed = parseJsonSafe(raw, { risks: [], suggestedNext: '' });
+  return {
+    risks: Array.isArray(parsed.risks) ? parsed.risks : [],
+    suggestedNext: parsed.suggestedNext || '',
+    elapsedMs: Date.now() - t0,
+  };
+}
+
 // Build a compact, Claude-friendly snapshot of the project (drops verbose fields, trims notes).
 function buildProjectSnapshot(project) {
   const today = new Date(); today.setHours(0,0,0,0);
@@ -1996,6 +2131,12 @@ module.exports = async (req, res) => {
         break;
       case 'read-slack-channel':
         result = await readSlackChannel({ ...payload, project });
+        break;
+      case 'pm-ai-scan':
+        result = await pmAiScan({ ...payload, project });
+        break;
+      case 'analyze-flow-step':
+        result = await analyzeFlowStep({ ...payload, project });
         break;
       default:
         return res.status(400).json({ error: 'Unknown action: ' + action });
