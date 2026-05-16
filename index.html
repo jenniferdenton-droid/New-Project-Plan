@@ -6674,20 +6674,21 @@ function refreshProjectUpdateGates() {
 
   const scan = project.pmAiLastScan;
   if (scan && typeof scan.healthScore === 'number') {
+    // Once a health check exists, BOTH downstream steps unlock — the Generate button
+    // for the narrative lives inside Step 3, so locking it on missing text would
+    // create a chicken-and-egg problem (user could never click Generate).
     step2.style.opacity = '1';
     step2.style.pointerEvents = '';
+    step3.style.opacity = '1';
+    step3.style.pointerEvents = '';
     const when = scan.at ? new Date(scan.at).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '';
     const age = scan.at ? Math.round((Date.now() - new Date(scan.at).getTime()) / 86400000) : null;
     const stale = age !== null && age > 7;
-    statusEl.innerHTML = `${stale ? '⚠️' : '✅'} <strong>Health score: ${scan.healthScore}/100</strong> · last checked ${when}${stale ? ' <span style="color:var(--red);">(stale &gt;7d — re-run recommended)</span>' : ''}`;
-    const txt = (document.getElementById('proj_update_text')?.value || '').trim();
-    if (txt.length > 0) {
-      step3.style.opacity = '1';
-      step3.style.pointerEvents = '';
-    } else {
-      step3.style.opacity = '.5';
-      step3.style.pointerEvents = 'none';
-    }
+    // Friendly "you already ran it today" message
+    const lastDay = scan.at ? new Date(scan.at).toISOString().split('T')[0] : null;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const runToday = lastDay === todayStr;
+    statusEl.innerHTML = `${runToday ? '✅' : (stale ? '⚠️' : '✅')} <strong>Health score: ${scan.healthScore}/100</strong> · last checked ${when}${runToday ? ' <span style="color:var(--green);font-weight:700;">(already run today — you\'re cleared)</span>' : (stale ? ' <span style="color:var(--red);">(stale &gt;7d — re-run recommended)</span>' : '')}`;
   } else {
     statusEl.innerHTML = '<strong>No health check on record yet.</strong> Click below to run one — required before generating an update.';
     step2.style.opacity = '.5';
