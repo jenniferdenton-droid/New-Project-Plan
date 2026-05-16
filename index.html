@@ -336,6 +336,23 @@
   </div>
 
   <div id="dashboardContent" style="display:none;">
+    <!-- 📅 Friday end-of-week reminder banner (auto-shows Fri-Sun if HC is stale) -->
+    <div id="fridayReminderBanner" style="display:none;background:linear-gradient(90deg,#FEF3C7,#FFFDE7);border:2px solid #F59E0B;border-radius:8px;padding:12px 16px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="font-size:24px;line-height:1;">📅</div>
+        <div style="flex:1;min-width:200px;">
+          <div style="font-weight:800;color:#92400E;font-size:14px;">It's <span id="fridayDayName">Friday</span> — wrap up the week strong</div>
+          <div style="font-size:12px;color:#92400E;margin-top:2px;">Run your <strong>Project Health Check</strong> and send the <strong>weekly update</strong> to stakeholders.</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" style="background:linear-gradient(135deg,#1F1A47,#6B4EFF);" onclick="openProjectUpdateModal()">🩺 Run Now</button>
+          <button class="btn btn-secondary btn-sm" onclick="sendLeadReminder()" id="fridaySendReminderBtn">📧 Email Me a Reminder</button>
+          <button class="btn-icon" onclick="document.getElementById('fridayReminderBanner').style.display='none'; window._fridayDismissed = true;" title="Dismiss for this session" style="color:var(--text-secondary);">✕</button>
+        </div>
+      </div>
+      <div id="fridayReminderStatus" style="font-size:11px;color:#92400E;margin-top:6px;min-height:14px;"></div>
+    </div>
+
     <!-- Dashboard top toolbar -->
     <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
       <!-- Inline project due-date editor -->
@@ -459,6 +476,12 @@
         <div class="form-group">
           <label>Project Lead</label>
           <input type="text" id="setupLead" placeholder="Name of person leading this project">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Project Lead Email <span style="font-weight:400;color:var(--text-secondary);font-size:11px;">(used for Friday reminders &amp; Slack DM lookup)</span></label>
+          <input type="email" id="setupLeadEmail" placeholder="jennifer.denton@joinmoxie.com">
         </div>
       </div>
       <div class="form-group">
@@ -2298,17 +2321,38 @@
           The AI uses your latest Health Check results — score, duplicates, gaps, risks — to write an accurate update. <strong>This step is required.</strong>
         </div>
         <div id="proj_update_healthstatus" style="font-size:12px;color:#92400E;margin-bottom:10px;"></div>
-        <button class="btn btn-primary" style="background:linear-gradient(135deg,#1F1A47,#6B4EFF);" onclick="runHealthCheckFromUpdateModal()">🩺 Run Health Check Now</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button class="btn btn-primary" style="background:linear-gradient(135deg,#1F1A47,#6B4EFF);" onclick="runHealthCheckFromUpdateModal()">🩺 Run Health Check Now</button>
+          <span id="proj_update_rerun_hint" style="font-size:11px;color:#92400E;display:none;">Made changes? Re-run to see your new score.</span>
+        </div>
+        <!-- Inline findings (populated after a scan) — duplicates / gaps / suggestions / slack candidates -->
+        <div id="proj_update_findings" style="margin-top:14px;"></div>
       </div>
 
-      <!-- STEP 2 — Generate the update (locked until Step 1 passes) -->
-      <div id="proj_update_step2" style="opacity:.5;pointer-events:none;background:var(--gray-light);border-radius:8px;padding:14px 16px;margin-bottom:12px;transition:opacity .3s;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <!-- STEP 2 — Send Dashboard Snapshot (unlocked after Step 1) — PRIMARY for ops & exec email -->
+      <div id="proj_update_step2" style="opacity:.5;pointer-events:none;background:#ECFDF5;border-radius:8px;padding:14px 16px;margin-bottom:12px;transition:opacity .3s;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
           <span style="font-size:18px;">2️⃣</span>
-          <div style="font-weight:800;color:var(--gray-dark);font-size:14px;">Generate the update</div>
+          <div style="font-weight:800;color:#065F46;font-size:14px;">Send Dashboard Snapshot</div>
         </div>
         <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
-          Claude reads your plan + the Health Check results and writes a polished update: completed last week, pipeline next week, past due, health score, risks &amp; blockers.
+          Emails a polished snapshot of the current dashboard — RAG status, stats, owners by team, risks, past due, upcoming. Best for <strong>operational team updates</strong> and <strong>leadership exec summaries</strong>.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-teal" style="flex:1;min-width:200px;" onclick="sendDashboardSnapshotEmail()">📧 Send Dashboard Snapshot to Email</button>
+          <button class="btn btn-primary" style="background:#4A154B;flex:1;min-width:200px;" onclick="sendDashboardSnapshotSlack()">💬 Send Dashboard Snapshot to Slack</button>
+        </div>
+        <div id="proj_update_snapshot_status" style="font-size:11px;color:var(--text-secondary);margin-top:8px;min-height:14px;"></div>
+      </div>
+
+      <!-- STEP 3 — OPTIONAL AI-written narrative update (for richer Slack post) -->
+      <div id="proj_update_step3" style="opacity:.5;pointer-events:none;background:var(--gray-light);border-radius:8px;padding:14px 16px;transition:opacity .3s;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span style="font-size:18px;">3️⃣</span>
+          <div style="font-weight:800;color:var(--gray-dark);font-size:14px;">(Optional) AI-Written Narrative Update</div>
+        </div>
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+          For a written, narrative-style update Claude composes from your plan + health check. Best for Slack threads where you want context, not just stats.
         </p>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;">Audience:</label>
@@ -2319,23 +2363,13 @@
           </select>
           <button class="btn btn-primary btn-sm" onclick="buildProjectUpdateAi()" style="font-size:12px;">🔮 Generate with Claude</button>
         </div>
-
-        <textarea id="proj_update_text" rows="14"
-          placeholder="Run the Health Check above, then click Generate. Edit anything below before sending."
+        <textarea id="proj_update_text" rows="10"
+          placeholder="Optional — click Generate, edit, then Send to Slack."
           style="width:100%;font-size:12px;line-height:1.55;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:12px;border:1px solid var(--border);border-radius:6px;background:#fff;"></textarea>
-      </div>
-
-      <!-- STEP 3 — Send (locked until Step 2 has content) -->
-      <div id="proj_update_step3" style="opacity:.5;pointer-events:none;background:#ECFDF5;border-radius:8px;padding:14px 16px;transition:opacity .3s;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-          <span style="font-size:18px;">3️⃣</span>
-          <div style="font-weight:800;color:#065F46;font-size:14px;">Send to team</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm" onclick="copyAiOutput('proj_update_text')">📋 Copy</button>
           <div style="flex:1;"></div>
-          <button class="btn btn-teal" onclick="sendProjectUpdateEmail()">📧 Send Email to All</button>
-          <button class="btn btn-primary" style="background:#4A154B;" onclick="sendProjectUpdateSlack()">💬 Send to Slack Channel</button>
+          <button class="btn btn-primary" style="background:#4A154B;" onclick="sendProjectUpdateSlack()">💬 Send Narrative to Slack</button>
         </div>
       </div>
 
@@ -2357,12 +2391,24 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
         <div>
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Owner (Team)</label>
-          <select id="qe_owner" style="font-size:13px;width:100%;"></select>
+          <select id="qe_owner" style="font-size:13px;width:100%;" onchange="onQuickEditOwnerChange()"></select>
         </div>
         <div>
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Due Date</label>
-          <input type="date" id="qe_due" style="font-size:13px;width:100%;">
+          <input type="date" id="qe_due" style="font-size:13px;width:100%;" onchange="onQuickEditDueChange()">
         </div>
+      </div>
+
+      <!-- Inline "why" prompts — auto-appear when owner or due-date changes -->
+      <div id="qe_why_owner" style="display:none;background:#F3E8FF;border:1px solid var(--purple);border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--purple);letter-spacing:.5px;display:block;margin-bottom:4px;">📝 Why are you changing the owner?</label>
+        <div id="qe_why_owner_from_to" style="font-size:11px;color:var(--purple);margin-bottom:6px;font-weight:600;"></div>
+        <input type="text" id="qe_why_owner_text" placeholder="e.g. PSM is at capacity — handing off to Onboarding" style="font-size:13px;width:100%;">
+      </div>
+      <div id="qe_why_due" style="display:none;background:#FFF3E0;border:1px solid var(--orange);border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--orange);letter-spacing:.5px;display:block;margin-bottom:4px;">📅 Why are you moving the due date?</label>
+        <div id="qe_why_due_from_to" style="font-size:11px;color:var(--orange);margin-bottom:6px;font-weight:600;"></div>
+        <input type="text" id="qe_why_due_text" placeholder="e.g. Vendor SLA slipped 2 weeks — adjusting downstream tasks" style="font-size:13px;width:100%;">
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
@@ -2638,6 +2684,10 @@
         <div class="form-group">
           <label>Project Lead</label>
           <input type="text" id="wLead" placeholder="Who is owning this project?">
+        </div>
+        <div class="form-group">
+          <label>Project Lead Email <span style="font-weight:400;color:var(--text-secondary);font-size:11px;">(for Friday reminders + Slack DM)</span></label>
+          <input type="email" id="wLeadEmail" placeholder="jennifer.denton@joinmoxie.com">
         </div>
         <div class="form-group">
           <label>Project Description / Objective</label>
@@ -3861,6 +3911,7 @@ function createProject() {
     name: document.getElementById('wProjectName').value.trim(),
     dueDate: document.getElementById('wDueDate').value,
     lead: document.getElementById('wLead').value.trim(),
+    leadEmail: (document.getElementById('wLeadEmail')?.value || '').trim(),
     description: document.getElementById('wDesc').value.trim(),
     externalTeam: document.getElementById('wExternal').checked,
     externalDetail: document.getElementById('wExternalText').value.trim(),
@@ -4063,6 +4114,8 @@ function syncSetupForm() {
   document.getElementById('setupName').value = project.name;
   document.getElementById('setupDueDate').value = project.dueDate;
   document.getElementById('setupLead').value = project.lead;
+  const leadEmailEl = document.getElementById('setupLeadEmail');
+  if (leadEmailEl) leadEmailEl.value = project.leadEmail || '';
   document.getElementById('setupDesc').value = project.description;
   document.getElementById('setupExternalTeam').checked = project.externalTeam;
   document.getElementById('setupExternalDetail').value = project.externalDetail;
@@ -4075,6 +4128,7 @@ function saveSetup() {
   project.name = document.getElementById('setupName').value.trim();
   project.dueDate = document.getElementById('setupDueDate').value;
   project.lead = document.getElementById('setupLead').value.trim();
+  project.leadEmail = (document.getElementById('setupLeadEmail')?.value || '').trim();
   project.description = document.getElementById('setupDesc').value.trim();
   project.externalTeam = document.getElementById('setupExternalTeam').checked;
   project.externalDetail = document.getElementById('setupExternalDetail').value.trim();
@@ -5418,6 +5472,11 @@ function openQuickEditModal(kind, itemId) {
     : (project.tasks || []).find(x => x.id === itemId);
   if (!item) { showToast('Item not found.', 'error'); return; }
   window._quickEditCtx = { kind, id: itemId, original: JSON.parse(JSON.stringify(item)) };
+  // Reset the inline "why" prompts
+  document.getElementById('qe_why_owner').style.display = 'none';
+  document.getElementById('qe_why_owner_text').value = '';
+  document.getElementById('qe_why_due').style.display = 'none';
+  document.getElementById('qe_why_due_text').value = '';
 
   const isAi = kind === 'ai';
   document.getElementById('qe_title').textContent = (isAi ? '📝 Quick Edit — Action Item' : '📝 Quick Edit — Task');
@@ -5461,6 +5520,32 @@ function openQuickEditModal(kind, itemId) {
   document.getElementById('quickEditModal').classList.add('open');
 }
 
+// Show / hide the inline "why" prompt rows when the user edits owner or due date
+function onQuickEditOwnerChange() {
+  const ctx = window._quickEditCtx; if (!ctx) return;
+  const newOwner = document.getElementById('qe_owner').value;
+  const oldOwner = ctx.original.owner || '';
+  const wrap = document.getElementById('qe_why_owner');
+  if (newOwner !== oldOwner) {
+    document.getElementById('qe_why_owner_from_to').textContent = `From: ${oldOwner || '(none)'}   →   To: ${newOwner || '(none)'}`;
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+function onQuickEditDueChange() {
+  const ctx = window._quickEditCtx; if (!ctx) return;
+  const newDue = document.getElementById('qe_due').value;
+  const oldDue = ctx.original.dueDate || '';
+  const wrap = document.getElementById('qe_why_due');
+  if (newDue !== oldDue) {
+    document.getElementById('qe_why_due_from_to').textContent = `From: ${oldDue || '(none)'}   →   To: ${newDue || '(none)'}`;
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
 function saveQuickEdit() {
   const ctx = window._quickEditCtx;
   if (!ctx) return;
@@ -5477,30 +5562,32 @@ function saveQuickEdit() {
   const newNotes  = document.getElementById('qe_notes').value;
   const newFlag   = isAi ? false : document.getElementById('qe_risk_flag').checked;
   const newRiskD  = isAi ? '' : document.getElementById('qe_risk_detail').value.trim();
+  const ownerWhy  = (document.getElementById('qe_why_owner_text').value || '').trim();
+  const dueWhy    = (document.getElementById('qe_why_due_text').value || '').trim();
 
   const changes = [];
-  // Owner change — require reason if changing from an existing owner
+  // Every owner change tracked (regardless of whether a reason was given)
   if (newOwner !== (orig.owner || '')) {
-    if (orig.owner && newOwner) {
-      const reason = prompt(`Changing owner: ${orig.owner} → ${newOwner}\n\nWhy is this changing? (Optional — blank to skip)`, '');
-      if (reason === null) return;
-      if (reason.trim()) changes.push(`Owner ${orig.owner} → ${newOwner}: ${reason.trim()}`);
-    }
     item.owner = newOwner;
+    const label = `Owner ${orig.owner || '(empty)'} → ${newOwner || '(cleared)'}`;
+    changes.push(ownerWhy ? `${label}: ${ownerWhy}` : label);
   }
-  // Due date change — require reason if changing from an existing date
+  // Every due-date change tracked (regardless of whether a reason was given)
   if (newDue !== (orig.dueDate || '')) {
-    if (orig.dueDate && newDue) {
-      const reason = prompt(`Changing due date: ${orig.dueDate} → ${newDue}\n\nWhy is this changing? (Optional — blank to skip)`, '');
-      if (reason === null) return;
-      if (reason.trim()) changes.push(`Date moved ${orig.dueDate} → ${newDue}: ${reason.trim()}`);
-    }
     item.dueDate = newDue;
+    const label = `Date ${orig.dueDate || '(empty)'} → ${newDue || '(cleared)'}`;
+    changes.push(dueWhy ? `${label}: ${dueWhy}` : label);
   }
-  if (newStatus !== orig.status) { item.status = newStatus; changes.push(`Status: ${orig.status||'—'} → ${newStatus}`); }
-  if (isAi && newPri !== orig.priority) { item.priority = newPri; changes.push(`Priority: ${orig.priority||'—'} → ${newPri}`); }
+  if (newStatus !== orig.status) {
+    item.status = newStatus;
+    changes.push(`Status ${orig.status||'—'} → ${newStatus}`);
+  }
+  if (isAi && newPri !== orig.priority) {
+    item.priority = newPri;
+    changes.push(`Priority ${orig.priority||'—'} → ${newPri}`);
+  }
 
-  // Notes — append change log to existing notes if there are changes; also keep user's edits
+  // Append the change log to notes (any time tracked fields changed)
   let mergedNotes = newNotes;
   if (changes.length) {
     const stamp = `[${new Date().toISOString().slice(0,10)}] ` + changes.join(' · ');
@@ -5509,6 +5596,11 @@ function saveQuickEdit() {
   item.notes = mergedNotes;
 
   if (!isAi) {
+    // Risk flag transition is also tracked
+    if (newFlag !== !!orig.flaggedRisk) {
+      const riskLog = `[${new Date().toISOString().slice(0,10)}] Risk flag ${orig.flaggedRisk?'on':'off'} → ${newFlag?'on':'off'}${newRiskD ? ': ' + newRiskD : ''}`;
+      item.notes = (item.notes ? item.notes + '\n' : '') + riskLog;
+    }
     item.flaggedRisk = newFlag;
     item.riskDetail = newFlag ? newRiskD : '';
   }
@@ -5520,10 +5612,15 @@ function saveQuickEdit() {
   if (typeof refreshAfterOwnerChange === 'function') refreshAfterOwnerChange();
   triggerAutoSave();
 
-  document.getElementById('qe_status_line').textContent = '✓ Saved.';
-  document.getElementById('qe_status_line').style.color = 'var(--green)';
-  showToast('✓ Updated.');
-  setTimeout(() => closeModal('quickEditModal'), 500);
+  const statusLine = document.getElementById('qe_status_line');
+  if (changes.length) {
+    statusLine.innerHTML = '✓ Saved · ' + changes.length + ' change' + (changes.length!==1?'s':'') + ' logged to notes.';
+  } else {
+    statusLine.textContent = '✓ Saved.';
+  }
+  statusLine.style.color = 'var(--green)';
+  showToast('✓ Updated' + (changes.length ? ` · ${changes.length} change${changes.length!==1?'s':''} logged` : ''));
+  setTimeout(() => closeModal('quickEditModal'), 600);
 }
 
 // ── Auto-recompute milestone target dates from latest child due date ──
@@ -6477,6 +6574,52 @@ function buildLaunchChecklist() {
   renderPrelaunchOnSetup();
 }
 
+// ── Friday end-of-week reminder ──
+// Show the banner if: today is Friday/Saturday/Sunday AND health check is stale (>5 days
+// or never), AND user hasn't dismissed it this session.
+function maybeShowFridayReminder() {
+  if (!hasProject) return;
+  if (window._fridayDismissed) return;
+  const banner = document.getElementById('fridayReminderBanner');
+  if (!banner) return;
+  const dow = new Date().getDay(); // 0=Sun, 5=Fri, 6=Sat
+  if (dow !== 5 && dow !== 6 && dow !== 0) { banner.style.display = 'none'; return; }
+  const dayName = dow === 5 ? 'Friday' : dow === 6 ? 'Saturday' : 'Sunday';
+  document.getElementById('fridayDayName').textContent = dayName;
+
+  // Only show if HC is missing or >5 days old
+  const lastScan = project.pmAiLastScan;
+  const stale = !lastScan || !lastScan.at || (Date.now() - new Date(lastScan.at).getTime()) > 5 * 86400000;
+  banner.style.display = stale ? 'block' : 'none';
+}
+
+async function sendLeadReminder() {
+  if (!hasProject) return;
+  const btn = document.getElementById('fridaySendReminderBtn');
+  const status = document.getElementById('fridayReminderStatus');
+  if (!project.leadEmail || !project.leadEmail.trim()) {
+    status.innerHTML = '⚠️ Set your <strong>Project Lead Email</strong> in Project Setup first.';
+    return;
+  }
+  btn.disabled = true;
+  status.textContent = '⏳ Sending reminder to ' + project.leadEmail + ' (email + Slack DM)…';
+  try {
+    const r = await aiCallApi('send-lead-reminder', {});
+    const parts = [];
+    if (r.emailSent) parts.push('✓ Email sent');
+    if (r.slackSent) parts.push('✓ Slack DM sent');
+    if (r.errors && r.errors.length) parts.push('⚠ ' + r.errors.join(' · '));
+    status.innerHTML = parts.join(' · ');
+    status.style.color = (r.emailSent || r.slackSent) ? '#065F46' : '#991B1B';
+    showToast(parts.join(' · '));
+  } catch (e) {
+    status.innerHTML = '✗ ' + e.message;
+    status.style.color = '#991B1B';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // Update the whole project's due date from the dashboard toolbar
 function updateProjectDueDate(value) {
   if (!hasProject) return;
@@ -6568,9 +6711,33 @@ async function runHealthCheckFromUpdateModal() {
     triggerAutoSave();
     if (typeof updateDashboard === 'function') updateDashboard();
     refreshProjectUpdateGates();
+    // Render the full findings inline in the modal so user can act on them and re-run
+    renderProjectUpdateFindings(r);
+    const rerun = document.getElementById('proj_update_rerun_hint');
+    if (rerun) rerun.style.display = 'inline';
   } catch (e) {
     statusEl.innerHTML = '<span style="color:var(--red);">✗ ' + e.message + '</span>';
   }
+}
+
+// Render PM AI findings inside the Project Update modal — re-uses renderPmAiFindings target swap
+function renderProjectUpdateFindings(r) {
+  const container = document.getElementById('proj_update_findings');
+  if (!container) return;
+  // Temporarily redirect renderPmAiFindings output to our container by swapping the target element
+  // (renderPmAiFindings writes to #pm_ai_findings — we mirror its output here).
+  const tmp = document.createElement('div');
+  tmp.id = 'pm_ai_findings';
+  // Save the existing container so we can restore it
+  const realFindings = document.getElementById('pm_ai_findings');
+  if (realFindings) realFindings.id = 'pm_ai_findings_real';
+  document.body.appendChild(tmp);
+  renderPmAiFindings(r);
+  // Move the rendered HTML to our inline container
+  container.innerHTML = tmp.innerHTML;
+  tmp.remove();
+  // Restore the original ID so the standalone PM AI modal still works
+  if (realFindings) realFindings.id = 'pm_ai_findings';
 }
 
 // Step 2 — Claude writes the update grounded in the latest health check
@@ -6590,6 +6757,234 @@ async function buildProjectUpdateAi() {
     refreshProjectUpdateGates();
   } catch (e) {
     setAiStatus('proj_update_status', '✗ ' + e.message, 'var(--red)');
+  }
+}
+
+// ── Dashboard snapshot builders ──
+function buildDashboardSnapshotHtml() {
+  const esc = s => String(s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayMs = today.getTime();
+  const rag = (project.ragStatus && project.ragStatus.status) || 'Green';
+  const ragReason = (project.ragStatus && project.ragStatus.reason) || '';
+  const ragBg = rag === 'Red' ? '#FEE2E2' : rag === 'Amber' ? '#FEF3C7' : '#D1FAE5';
+  const ragFg = rag === 'Red' ? '#991B1B' : rag === 'Amber' ? '#92400E' : '#065F46';
+  const ragEmoji = rag === 'Red' ? '🔴' : rag === 'Amber' ? '🟡' : '🟢';
+  const dueDate = project.dueDate ? new Date(project.dueDate + 'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : 'TBD';
+
+  const tasks = project.tasks || [];
+  const totalT = tasks.length;
+  const doneT  = tasks.filter(t => t.status === 'Done').length;
+  const atRisk = tasks.filter(t => t.status === 'At Risk' || t.flaggedRisk).length;
+  const blocked= tasks.filter(t => t.status === 'Blocked').length;
+  const openR  = (project.risks || []).filter(r => r.status === 'Open' || r.status === 'Monitoring' || !r.status).length;
+  const openA  = (project.actionItems || []).filter(a => a.status !== 'Done').length;
+  const pastDue = tasks.filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() < todayMs)
+                       .sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
+  const upcoming = tasks.filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() >= todayMs && new Date(t.dueDate+'T00:00:00').getTime() <= todayMs + 14*86400000)
+                        .sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
+  const msDone = (project.milestones || []).filter(m => m.status === 'Complete').length;
+  const msTotal = (project.milestones || []).length;
+  const flaggedRisks = (project.risks || []).filter(r => r.status === 'Open' || !r.status);
+
+  // Owners-by-team rollup (read from stakeholder plan, not inferred)
+  const ownerRows = STAKEHOLDER_LIST
+    .filter(s => project.stakeholders?.[s.key]?.included)
+    .map(s => {
+      const sd = project.stakeholders[s.key] || {};
+      const tCount = tasks.filter(t => inferTeams(t.owner || '').includes(s.label)).length;
+      const aCount = (project.actionItems || []).filter(a => a.status !== 'Done' && inferTeams(a.owner || '').includes(s.label)).length;
+      return { team: s.label, color: teamColor(s.label), poc: sd.contactName || '', tCount, aCount };
+    });
+
+  // Risks-by-team rollup
+  const risksByTeam = {};
+  flaggedRisks.forEach(r => {
+    const teams = inferTeams(r.owner || '');
+    teams.forEach(t => { risksByTeam[t] = (risksByTeam[t] || 0) + 1; });
+  });
+  const riskTeamLines = Object.entries(risksByTeam)
+    .sort((a,b)=>b[1]-a[1])
+    .map(([t,c]) => `${esc(t)}: ${c}`)
+    .join(' · ');
+
+  const stat = (num, label, color) => `<td style="padding:10px 14px;text-align:center;background:#fff;border:1px solid #E2E8F0;border-radius:6px;width:14%;">
+    <div style="font-size:24px;font-weight:900;color:${color};line-height:1;">${num}</div>
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748B;letter-spacing:.5px;margin-top:4px;">${label}</div>
+  </td>`;
+
+  const taskRow = t => `<tr style="border-top:1px solid #E2E8F0;">
+    <td style="padding:8px 10px;font-size:13px;">${esc(t.task || '—')}</td>
+    <td style="padding:8px 10px;font-size:13px;color:#475569;white-space:nowrap;">${esc(t.owner || 'TBD')}</td>
+    <td style="padding:8px 10px;font-size:13px;color:#475569;white-space:nowrap;">${t.dueDate ? new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</td>
+    <td style="padding:8px 10px;font-size:13px;color:#475569;white-space:nowrap;">${esc(t.status || '')}</td>
+  </tr>`;
+
+  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:760px;margin:0 auto;color:#1F2937;background:#F8FAFC;padding:20px;">
+
+    <!-- Header -->
+    <div style="background:#1F1A47;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0;">
+      <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;opacity:.7;">PROJECT DASHBOARD</div>
+      <div style="font-size:26px;font-weight:900;margin-top:4px;">${esc(project.name || 'Project')}</div>
+      <div style="font-size:13px;opacity:.85;margin-top:6px;">Lead: ${esc(project.lead || 'TBD')} · Target Launch: ${esc(dueDate)}</div>
+    </div>
+
+    <!-- RAG banner -->
+    <div style="background:${ragBg};border:1px solid ${ragFg};padding:14px 20px;margin-top:-1px;display:flex;align-items:center;gap:14px;">
+      <div style="font-size:28px;line-height:1;">${ragEmoji}</div>
+      <div style="flex:1;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${ragFg};">Project Health</div>
+        <div style="font-size:18px;font-weight:900;color:${ragFg};margin-top:2px;">${esc(rag.toUpperCase())}</div>
+        ${ragReason ? `<div style="font-size:13px;color:${ragFg};margin-top:2px;">${esc(ragReason)}</div>` : ''}
+      </div>
+      ${project.pmAiLastScan ? `<div style="text-align:right;font-size:11px;color:${ragFg};">
+        <div><strong>Health Check</strong></div>
+        <div>${project.pmAiLastScan.healthScore}/100</div>
+        <div style="opacity:.8;">${new Date(project.pmAiLastScan.at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+      </div>` : ''}
+    </div>
+
+    <!-- Stats grid -->
+    <table style="width:100%;border-collapse:separate;border-spacing:6px;margin-top:14px;background:transparent;">
+      <tr>
+        ${stat(totalT, 'Total Tasks', '#6B4EFF')}
+        ${stat(doneT, 'Completed', '#10B981')}
+        ${stat(atRisk, 'At Risk', '#F59E0B')}
+        ${stat(blocked, 'Blocked', '#DC2626')}
+        ${stat(openR, 'Open Risks', '#DC2626')}
+        ${stat(openA, 'Open AIs', '#F57C00')}
+        ${stat(msDone + '/' + msTotal, 'Milestones', '#0F766E')}
+      </tr>
+    </table>
+
+    <!-- Owners by team -->
+    ${ownerRows.length ? `<div style="background:#fff;border:1px solid #E2E8F0;border-radius:8px;padding:14px 18px;margin-top:14px;">
+      <div style="font-size:12px;font-weight:800;color:#1F2937;margin-bottom:10px;">👥 PROJECT OWNERS BY TEAM</div>
+      <table style="width:100%;border-collapse:collapse;">
+        ${ownerRows.map(o => `<tr>
+          <td style="padding:6px 8px;font-size:13px;border-bottom:1px solid #F1F5F9;">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${o.color};margin-right:6px;"></span>
+            <strong>${esc(o.team)}</strong>
+          </td>
+          <td style="padding:6px 8px;font-size:13px;border-bottom:1px solid #F1F5F9;color:#475569;">${esc(o.poc || '(no POC)')}</td>
+          <td style="padding:6px 8px;font-size:12px;border-bottom:1px solid #F1F5F9;color:#64748B;text-align:right;white-space:nowrap;"><strong>${o.tCount}</strong> tasks · <strong>${o.aCount}</strong> open AIs</td>
+        </tr>`).join('')}
+      </table>
+    </div>` : ''}
+
+    <!-- Risks by team -->
+    ${flaggedRisks.length ? `<div style="background:#FEE2E2;border:1px solid #DC2626;border-radius:8px;padding:14px 18px;margin-top:14px;">
+      <div style="font-size:12px;font-weight:800;color:#991B1B;margin-bottom:8px;">🚩 OPEN RISKS (${flaggedRisks.length})</div>
+      ${riskTeamLines ? `<div style="font-size:12px;color:#991B1B;margin-bottom:8px;font-weight:600;">Concentrated in: ${riskTeamLines}</div>` : ''}
+      <ul style="margin:0;padding-left:18px;font-size:12px;color:#1F2937;">
+        ${flaggedRisks.slice(0,8).map(r => `<li style="margin:3px 0;"><strong>[${esc(r.impact || 'Med')}]</strong> ${esc(r.risk || 'Unnamed risk')} — ${esc(r.owner || 'TBD')}${r.mitigation ? ' · <em>Mitigation: ' + esc(r.mitigation) + '</em>' : ''}</li>`).join('')}
+      </ul>
+    </div>` : ''}
+
+    <!-- Past due -->
+    ${pastDue.length ? `<div style="background:#fff;border:1px solid #DC2626;border-radius:8px;margin-top:14px;overflow:hidden;">
+      <div style="background:#FEE2E2;padding:10px 18px;color:#991B1B;font-size:12px;font-weight:800;">❗ PAST DUE (${pastDue.length})</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:#F8FAFC;"><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;">Item</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;">Owner</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;">Was Due</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;">Status</th></tr></thead>
+        <tbody>${pastDue.slice(0,15).map(taskRow).join('')}</tbody>
+      </table>
+    </div>` : ''}
+
+    <!-- Upcoming -->
+    ${upcoming.length ? `<div style="background:#fff;border:1px solid #E2E8F0;border-radius:8px;margin-top:14px;overflow:hidden;">
+      <div style="background:#DBEAFE;padding:10px 18px;color:#1E3A8A;font-size:12px;font-weight:800;">📅 UPCOMING DUE — NEXT 14 DAYS (${upcoming.length})</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:#F8FAFC;"><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;">Item</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;">Owner</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;">Due</th><th align="left" style="padding:6px 10px;font-size:11px;text-transform:uppercase;color:#64748B;">Status</th></tr></thead>
+        <tbody>${upcoming.slice(0,15).map(taskRow).join('')}</tbody>
+      </table>
+    </div>` : ''}
+
+    <!-- Footer -->
+    <div style="text-align:center;font-size:11px;color:#64748B;margin-top:18px;padding-top:14px;border-top:1px solid #E2E8F0;">
+      Generated ${new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})} from the Moxie Project Tracker.
+    </div>
+  </div>`;
+}
+
+function buildDashboardSnapshotSlack() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayMs = today.getTime();
+  const rag = (project.ragStatus && project.ragStatus.status) || 'Green';
+  const ragEmoji = rag === 'Red' ? ':red_circle:' : rag === 'Amber' ? ':large_yellow_circle:' : ':large_green_circle:';
+  const tasks = project.tasks || [];
+  const totalT = tasks.length, doneT = tasks.filter(t => t.status === 'Done').length;
+  const atRisk = tasks.filter(t => t.status === 'At Risk' || t.flaggedRisk).length;
+  const blocked= tasks.filter(t => t.status === 'Blocked').length;
+  const openR  = (project.risks || []).filter(r => r.status === 'Open' || r.status === 'Monitoring' || !r.status).length;
+  const openA  = (project.actionItems || []).filter(a => a.status !== 'Done').length;
+  const pastDue = tasks.filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() < todayMs);
+  const upcoming = tasks.filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() >= todayMs && new Date(t.dueDate+'T00:00:00').getTime() <= todayMs + 7*86400000)
+                        .sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
+  const dueDate = project.dueDate ? new Date(project.dueDate + 'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : 'TBD';
+
+  // Risks-by-team rollup
+  const risksByTeam = {};
+  (project.risks || []).filter(r => r.status === 'Open' || !r.status).forEach(r => {
+    const teams = inferTeams(r.owner || '');
+    teams.forEach(t => { risksByTeam[t] = (risksByTeam[t] || 0) + 1; });
+  });
+  const riskTeamLines = Object.entries(risksByTeam).sort((a,b)=>b[1]-a[1]).map(([t,c]) => `${t}: ${c}`).join(' · ');
+
+  const lines = [
+    `*📊 ${project.name || 'Project'} — Dashboard Snapshot*`,
+    `${ragEmoji} *Health:* ${rag}${project.pmAiLastScan ? ` _(${project.pmAiLastScan.healthScore}/100)_` : ''}    :dart: *Lead:* ${project.lead || 'TBD'}    :calendar: *Target:* ${dueDate}`,
+    '',
+    `*Stats:*  :clipboard: ${totalT} tasks · :white_check_mark: ${doneT} done · :warning: ${atRisk} at risk · :no_entry: ${blocked} blocked · :triangular_flag_on_post: ${openR} risks · :zap: ${openA} open AIs`,
+  ];
+  if (pastDue.length) {
+    lines.push('', `:exclamation: *Past Due (${pastDue.length}):*`);
+    pastDue.slice(0,5).forEach(t => lines.push(`• ${t.task} — ${t.owner || 'TBD'} _(was ${new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})})_`));
+  }
+  if (upcoming.length) {
+    lines.push('', `:date: *Upcoming Next 7d (${upcoming.length}):*`);
+    upcoming.slice(0,5).forEach(t => lines.push(`• ${t.task} — ${t.owner || 'TBD'} _(due ${new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})})_`));
+  }
+  if (riskTeamLines) {
+    lines.push('', `:warning: *Open Risks by Team:* ${riskTeamLines}`);
+  }
+  return lines.join('\n');
+}
+
+// ── Send the dashboard snapshot via email or Slack ──
+async function sendDashboardSnapshotEmail() {
+  if (!hasProject) return;
+  if (!project.pmAiLastScan) { showToast('Run the Health Check first.', 'error'); return; }
+  const statusEl = document.getElementById('proj_update_snapshot_status');
+  statusEl.textContent = '⏳ Sending dashboard snapshot…';
+  statusEl.style.color = 'var(--text-secondary)';
+  try {
+    const html = buildDashboardSnapshotHtml();
+    const subject = `Project Snapshot — ${project.name || 'Project'} — ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
+    await aiCallApi('quick-send', { channel: 'email', subject, body: html, polish: false });
+    statusEl.textContent = '✓ Dashboard snapshot emailed to all enabled recipients.';
+    statusEl.style.color = 'var(--green)';
+    showToast('Dashboard snapshot emailed.');
+  } catch (e) {
+    statusEl.textContent = '✗ Email failed: ' + e.message;
+    statusEl.style.color = 'var(--red)';
+  }
+}
+
+async function sendDashboardSnapshotSlack() {
+  if (!hasProject) return;
+  if (!project.pmAiLastScan) { showToast('Run the Health Check first.', 'error'); return; }
+  const statusEl = document.getElementById('proj_update_snapshot_status');
+  statusEl.textContent = '⏳ Posting dashboard snapshot to Slack…';
+  statusEl.style.color = 'var(--text-secondary)';
+  try {
+    const body = buildDashboardSnapshotSlack();
+    await aiCallApi('quick-send', { channel: 'slack', subject: '', body, polish: false });
+    statusEl.textContent = '✓ Dashboard snapshot posted to Slack.';
+    statusEl.style.color = 'var(--green)';
+    showToast('Posted to Slack.');
+  } catch (e) {
+    statusEl.textContent = '✗ Slack failed: ' + e.message;
+    statusEl.style.color = 'var(--red)';
   }
 }
 
@@ -8380,6 +8775,8 @@ function updateDashboard() {
   // Sync inline due-date input
   const dueInp = document.getElementById('dashProjectDueDate');
   if (dueInp) dueInp.value = project.dueDate || '';
+  // Friday/weekend reminder banner
+  if (typeof maybeShowFridayReminder === 'function') maybeShowFridayReminder();
 
   const today = new Date(); today.setHours(0,0,0,0);
   const total = project.tasks.length;
@@ -8474,11 +8871,51 @@ function updateDashboard() {
   // Team Roster — groups all owners (from tasks, AIs, milestones, people) by inferred team
   renderTeamRoster();
 
-  // Flagged risks
-  const flagged = project.risks.filter(r => r.status !== 'Closed');
+  // ── Flagged risks — list + per-team rollup so we see which teams are holding the project up ──
+  const flagged = (project.risks || []).filter(r => r.status !== 'Closed');
+
+  // Count risks per team (using inferTeams so we resolve owner → team label)
+  // Also separately count Blocked/At-Risk TASKS by team so PMs see the full picture.
+  const riskByTeam  = {};
+  const blockByTeam = {};
+  flagged.forEach(r => {
+    inferTeams(r.owner || '').forEach(t => { riskByTeam[t] = (riskByTeam[t] || 0) + 1; });
+  });
+  (project.tasks || []).filter(t => t.status === 'Blocked' || t.status === 'At Risk' || t.flaggedRisk).forEach(t => {
+    inferTeams(t.owner || '').forEach(team => { blockByTeam[team] = (blockByTeam[team] || 0) + 1; });
+  });
+
+  // Combine and rank
+  const combined = {};
+  Object.entries(riskByTeam).forEach(([t,c]) => { combined[t] = (combined[t] || 0) + c; });
+  Object.entries(blockByTeam).forEach(([t,c]) => { combined[t] = (combined[t] || 0) + c; });
+  const teamChips = Object.entries(combined)
+    .filter(([t]) => t && t !== 'Unassigned')
+    .sort((a,b) => b[1] - a[1])
+    .map(([team, total]) => {
+      const r = riskByTeam[team] || 0;
+      const b = blockByTeam[team] || 0;
+      const color = teamColor(team);
+      return `<span style="display:inline-flex;align-items:center;gap:5px;background:${color}18;color:${color};border:1px solid ${color}40;border-radius:14px;padding:4px 10px;font-size:12px;font-weight:600;margin:0 4px 4px 0;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${color};"></span>
+        ${escHtml(team)}
+        <span style="background:${color};color:#fff;border-radius:8px;padding:1px 6px;font-size:11px;font-weight:800;">${total}</span>
+        <span style="font-size:10px;color:${color};opacity:.8;">${r}🚩 ${b}⛔</span>
+      </span>`;
+    }).join('');
+
+  const teamRollupBlock = teamChips ? `
+    <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:10px 12px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#92400E;margin-bottom:6px;">⚠️ Teams Holding the Project Up</div>
+      <div style="font-size:11px;color:#92400E;margin-bottom:8px;">Risks + blocked/at-risk tasks, by team — most concentrated first. Legend: 🚩 risks · ⛔ blocked/at-risk tasks.</div>
+      <div>${teamChips}</div>
+    </div>` : '';
+
   document.getElementById('dashRisks').innerHTML = flagged.length === 0
-    ? '<p style="color:var(--text-secondary);font-size:13px;">No open risks — great work!</p>'
-    : `<table style="width:100%;font-size:13px;border-collapse:collapse;">
+    ? (teamChips
+        ? teamRollupBlock + '<p style="color:var(--text-secondary);font-size:13px;">No open risks — but the teams above still have blocked / at-risk tasks.</p>'
+        : '<p style="color:var(--text-secondary);font-size:13px;">No open risks — great work!</p>')
+    : teamRollupBlock + `<table style="width:100%;font-size:13px;border-collapse:collapse;">
         <thead><tr>
           <th style="text-align:left;padding:6px 8px;background:#F8F9FA;font-size:11px;text-transform:uppercase;">Risk</th>
           <th style="text-align:left;padding:6px 8px;background:#F8F9FA;font-size:11px;text-transform:uppercase;">Impact</th>
@@ -8486,10 +8923,10 @@ function updateDashboard() {
           <th style="text-align:left;padding:6px 8px;background:#F8F9FA;font-size:11px;text-transform:uppercase;">Status</th>
         </tr></thead>
         <tbody>${flagged.map(r => `<tr style="border-bottom:1px solid var(--border);">
-          <td style="padding:6px 8px;">${r.risk || '—'}</td>
-          <td style="padding:6px 8px;color:${r.impact==='High'||r.impact==='Critical'?'var(--red)':'var(--orange)'};">${r.impact}</td>
-          <td style="padding:6px 8px;">${r.owner || '—'}</td>
-          <td style="padding:6px 8px;">${r.status}</td>
+          <td style="padding:6px 8px;">${escHtml(r.risk || '—')}</td>
+          <td style="padding:6px 8px;color:${r.impact==='High'||r.impact==='Critical'?'var(--red)':'var(--orange)'};">${escHtml(r.impact || '')}</td>
+          <td style="padding:6px 8px;">${escHtml(r.owner || '—')}</td>
+          <td style="padding:6px 8px;">${escHtml(r.status || '')}</td>
         </tr>`).join('')}</tbody>
       </table>`;
 
