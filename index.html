@@ -317,20 +317,15 @@
 <!-- TABS -->
 <div class="tabs-nav">
   <button class="tab-btn active" data-tab="dashboard"  onclick="switchTab('dashboard')">📊 Dashboard</button>
-  <button class="tab-btn"        data-tab="setup"       onclick="switchTab('setup')">⚙️ Project Setup</button>
   <button class="tab-btn"        data-tab="milestones"  onclick="switchTab('milestones')">🗂 Plan</button>
   <button class="tab-btn"        data-tab="workstreams" onclick="switchTab('workstreams')">🧭 Workstreams</button>
-  <button class="tab-btn"        data-tab="launch"      onclick="switchTab('launch')">🚀 Launch Checklist</button>
   <button class="tab-btn"        data-tab="calendar"    onclick="switchTab('calendar')">📅 Calendar</button>
   <button class="tab-btn"        data-tab="aiassistant" onclick="switchTab('aiassistant')" style="color:var(--purple);font-weight:700;">🤖 AI Assistant</button>
-  <button class="tab-btn"        data-tab="links"       onclick="switchTab('links')">🔗 Links</button>
-  <button class="tab-btn"        data-tab="decisions"   onclick="switchTab('decisions')">📋 Decisions</button>
-  <button class="tab-btn"        data-tab="digests"     onclick="switchTab('digests')">📧 Digests & Briefs</button>
   <button class="tab-btn"        data-tab="risks"       onclick="switchTab('risks')">⚠️ Risk Register</button>
+  <button class="tab-btn"        data-tab="links"       onclick="switchTab('links')">🔗 Links</button>
+  <button class="tab-btn"        data-tab="setup"       onclick="switchTab('setup')">⚙️ Project Setup</button>
   <button class="tab-btn"        data-tab="budget"      onclick="switchTab('budget')">💰 Budget</button>
   <button class="tab-btn"        data-tab="processflow" onclick="switchTab('processflow')">🧩 Process Flow</button>
-  <button class="tab-btn"        data-tab="handoff"     onclick="switchTab('handoff')">🤝 Handoff & SOPs</button>
-  <button class="tab-btn"        data-tab="proposal"    onclick="switchTab('proposal')">📄 Proposal Builder</button>
 </div>
 
 <!-- ===================== DASHBOARD ===================== -->
@@ -423,7 +418,7 @@
     <div class="card">
       <div class="card-header">
         <div class="card-title">🚀 Launch Checklist Progress</div>
-        <button class="btn btn-sm btn-secondary" onclick="switchTab('launch')">View Checklist →</button>
+        <button class="btn btn-sm btn-teal" onclick="openCompleteProjectModal()">✅ Complete Project →</button>
       </div>
       <div class="card-body" id="dashLaunch"></div>
     </div>
@@ -432,6 +427,19 @@
 
 <!-- ===================== SETUP ===================== -->
 <div id="tab-setup" class="tab-content">
+
+  <!-- 🔒 PRE-LAUNCH CHECKLIST (must complete before project work begins) -->
+  <div class="card" style="border:2px solid var(--orange);margin-bottom:18px;">
+    <div class="card-header" style="background:#FFF3E0;">
+      <div class="card-title">🔒 Pre-Launch Checklist — Required Before Project Work Begins</div>
+      <div id="setupPrelaunchProgress" style="font-size:12px;font-weight:700;color:var(--orange);"></div>
+    </div>
+    <div class="card-body">
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Complete these 3 items before the team starts execution. The launch is blocked until all are checked.</p>
+      <div id="setupPrelaunchItems"></div>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-header">
       <div class="card-title">⚙️ Project Setup & Stakeholder Plan</div>
@@ -473,22 +481,11 @@
   </div>
 </div>
 
-<!-- ===================== PROPOSAL BUILDER ===================== -->
-<div id="tab-proposal" class="tab-content">
-
-  <!-- TOP BANNER -->
-  <div style="background:linear-gradient(135deg,var(--purple-light),var(--teal-light));border-radius:var(--radius);padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-    <div>
-      <h2 style="font-size:17px;font-weight:700;color:var(--purple);margin-bottom:4px;">📄 Project Proposal Builder</h2>
-      <p style="font-size:13px;color:var(--gray-dark);">Already have a proposal in Google Docs? Paste the link below. Otherwise, generate one from the form.</p>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button class="btn btn-primary" onclick="generateProposal()">✨ Generate Proposal</button>
-      <button class="btn btn-teal" onclick="openPasteProposalModal()" title="Paste an existing proposal and auto-fill the form">📋 Paste Existing Proposal</button>
-      <button class="btn btn-secondary" onclick="openGoogleDriveImport()">📎 Import from Google Drive</button>
-      <button class="btn btn-secondary" onclick="document.getElementById('uploadSection').scrollIntoView({behavior:'smooth'})">⬆ Upload a Doc</button>
-    </div>
-  </div>
+<!-- ===================== PROPOSAL BUILDER (REMOVED) ===================== -->
+<!-- The Proposal Builder tab has been removed. Proposal generation is now in
+     AI Assistant > Drafts & Comms > Proposal Builder. The hidden stub div below
+     keeps any legacy refs from throwing. -->
+<div id="tab-proposal" class="tab-content" style="display:none;">
 
   <!-- EXISTING GOOGLE DOC LINK -->
   <div class="card" style="margin-bottom:20px;border-left:4px solid var(--teal);">
@@ -711,45 +708,9 @@
 </div>
 
 <!-- ===================== LAUNCH CHECKLIST ===================== -->
-<div id="tab-launch" class="tab-content">
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">🚀 Launch Checklist</div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div id="launchProgress" style="font-size:13px;color:var(--text-secondary);"></div>
-        <button class="btn btn-secondary btn-sm" onclick="openAddChecklistItemForm()">＋ Add Item</button>
-      </div>
-    </div>
-    <div class="card-body">
-      <div class="progress-bar" style="margin-bottom:20px;">
-        <div class="progress-fill" id="launchProgressBar" style="width:0%"></div>
-      </div>
-      <!-- Custom item form (hidden by default) -->
-      <div id="addChecklistItemForm" style="display:none;margin-bottom:16px;padding:12px 14px;background:var(--bg-alt,#f8f9fb);border-radius:var(--radius-sm);border:1px solid var(--border);">
-        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
-          <div style="flex:3;min-width:200px;">
-            <label style="font-size:11px;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;">Item Name *</label>
-            <input id="newClItemName" type="text" placeholder="e.g. Sign-off from Legal" class="form-input" style="font-size:13px;" onkeydown="if(event.key==='Enter')addCustomChecklistItem()">
-          </div>
-          <div style="flex:2;min-width:160px;">
-            <label style="font-size:11px;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;">Description (optional)</label>
-            <input id="newClItemDesc" type="text" placeholder="Brief note…" class="form-input" style="font-size:13px;" onkeydown="if(event.key==='Enter')addCustomChecklistItem()">
-          </div>
-          <div style="flex:1;min-width:100px;">
-            <label style="font-size:11px;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;">Type</label>
-            <select id="newClItemRequired" class="form-input" style="font-size:13px;">
-              <option value="true">Required</option>
-              <option value="false">Recommended</option>
-            </select>
-          </div>
-          <button class="btn btn-primary" onclick="addCustomChecklistItem()" style="white-space:nowrap;align-self:flex-end;">Add</button>
-          <button class="btn btn-secondary" onclick="document.getElementById('addChecklistItemForm').style.display='none'" style="align-self:flex-end;">Cancel</button>
-        </div>
-      </div>
-      <div id="launchChecklistItems"></div>
-    </div>
-  </div>
-</div>
+<!-- Launch Checklist tab content removed from nav. Real UI is rendered inside the Complete Project modal
+     (button on Plan tab + Dashboard). This empty stub avoids legacy switchTab('launch') errors. -->
+<div id="tab-launch" class="tab-content" style="display:none;"></div>
 
 <!-- ===================== MEETINGS ===================== -->
 <!-- Meeting Notes tab content removed from nav — manage meetings from 📅 Calendar tab instead.
@@ -788,8 +749,11 @@
   </div>
 </div>
 
-<!-- ===================== DIGESTS ===================== -->
-<div id="tab-digests" class="tab-content">
+<!-- ===================== DIGESTS (REMOVED) ===================== -->
+<!-- The Digests & Briefs tab has been removed. Digests are now generated in
+     AI Assistant > Reports & Briefs (Weekly Digest, Daily Digest, Meeting Prep,
+     Daily Standup). The hidden stub below keeps any legacy refs from throwing. -->
+<div id="tab-digests" class="tab-content" style="display:none;">
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
     <!-- Meeting Brief -->
     <div class="card">
@@ -946,6 +910,8 @@
     <button class="btn btn-secondary btn-sm" onclick="openPeopleModal()" title="Manage project team members">👥 People</button>
     <button class="btn btn-secondary btn-sm" onclick="openTaskTemplatesModal()" title="Load a pre-built task template pack">📋 Load Templates</button>
     <button class="btn btn-secondary btn-sm" onclick="openDocImportModal()" title="Paste a proposal to auto-extract tasks">📄 Import from Doc</button>
+    <div style="flex:1;"></div>
+    <button class="btn btn-teal" onclick="openCompleteProjectModal()" title="Open the project sign-off, launch checklist, and handoff/SOPs">✅ Complete Project →</button>
   </div>
 
   <!-- Plan filter bar -->
@@ -967,6 +933,11 @@
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-dark);cursor:pointer;">
       <input type="checkbox" id="planFilterPastDue" onchange="renderMilestones()">
       Past due only
+    </label>
+
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-dark);cursor:pointer;">
+      <input type="checkbox" id="planFilterNextWeek" onchange="renderMilestones()">
+      Next 7 days
     </label>
 
     <select id="planFilterStatus" onchange="renderMilestones()" style="font-size:12px;padding:3px 8px;">
@@ -1000,7 +971,9 @@
 </div>
 
 <!-- ===================== DECISIONS ===================== -->
-<div id="tab-decisions" class="tab-content">
+<!-- Decisions tab removed from nav. Add/manage decisions via AI Assistant > Smart Tools > Decision Logger.
+     Hidden stub div remains so render functions don't error. -->
+<div id="tab-decisions" class="tab-content" style="display:none;">
   <div class="card">
     <div class="card-header">
       <div class="card-title">📋 Decisions Log</div>
@@ -1163,7 +1136,8 @@
 </div>
 
 <!-- ===================== HANDOFF & SOPs ===================== -->
-<div id="tab-handoff" class="tab-content">
+<!-- Handoff & SOPs tab content kept hidden — rendered inside the Complete Project modal (button on Plan tab). -->
+<div id="tab-handoff" class="tab-content" style="display:none;">
   <div style="background:linear-gradient(135deg,#FFF3E0,var(--teal-light));border-radius:var(--radius);padding:20px 24px;margin-bottom:20px;">
     <h2 style="font-size:17px;font-weight:700;color:var(--orange);margin-bottom:4px;">🤝 Project Handoff & SOPs</h2>
     <p style="font-size:13px;color:var(--gray-dark);">Define who owns this work post-launch, track handoff completion, and capture signed-off SOPs.</p>
@@ -1253,153 +1227,398 @@
 <div id="tab-aiassistant" class="tab-content">
 
   <!-- TOP BANNER -->
-  <div style="background:linear-gradient(135deg,#1F1A47,#6B4EFF);border-radius:var(--radius);padding:24px 28px;margin-bottom:20px;color:#fff;">
-    <h2 style="font-size:20px;font-weight:800;margin-bottom:4px;">🤖 AI Assistant</h2>
-    <p style="font-size:13px;opacity:0.9;">Generate decks, send updates, process meeting transcripts. All powered by Claude + your existing tools (Slack, SendGrid, Drive).</p>
-    <div id="ai_status_badge" style="display:none;margin-top:10px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;background:rgba(255,255,255,0.2);"></div>
+  <div style="background:linear-gradient(135deg,#1F1A47,#6B4EFF);border-radius:var(--radius);padding:20px 24px;margin-bottom:14px;color:#fff;">
+    <h2 style="font-size:18px;font-weight:800;margin-bottom:2px;">🤖 AI Assistant</h2>
+    <p style="font-size:12px;opacity:0.9;">Ask, draft, summarize, send — every AI tool grounded in your live project state.</p>
+    <div id="ai_status_badge" style="display:none;margin-top:8px;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(255,255,255,0.2);"></div>
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+  <!-- ── SUB-TAB NAV ── -->
+  <div style="display:flex;gap:4px;border-bottom:2px solid var(--border);margin-bottom:18px;flex-wrap:wrap;">
+    <button class="ai-subtab-btn active" data-aisubtab="ask"     onclick="switchAiSubTab('ask')">💬 Ask &amp; Health</button>
+    <button class="ai-subtab-btn"        data-aisubtab="reports" onclick="switchAiSubTab('reports')">📋 Reports &amp; Briefs</button>
+    <button class="ai-subtab-btn"        data-aisubtab="drafts"  onclick="switchAiSubTab('drafts')">✍️ Drafts &amp; Comms</button>
+    <button class="ai-subtab-btn"        data-aisubtab="tools"   onclick="switchAiSubTab('tools')">🔧 Smart Tools</button>
+    <button class="ai-subtab-btn"        data-aisubtab="settings" onclick="switchAiSubTab('settings')">⚙️ Settings</button>
+  </div>
+  <style>
+    .ai-subtab-btn { background:transparent; border:none; padding:8px 14px; font-size:13px; font-weight:600; color:var(--text-secondary); cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .15s; }
+    .ai-subtab-btn:hover { color:var(--purple); }
+    .ai-subtab-btn.active { color:var(--purple); border-bottom-color:var(--purple); }
+    .ai-subtab-content { display:none; }
+    .ai-subtab-content.active { display:block; }
+    .ai-output { width:100%; min-height:160px; max-height:380px; background:var(--gray-light); border:1px solid var(--border); border-left:3px solid var(--purple); padding:12px 14px; border-radius:var(--radius-sm); font-size:12px; line-height:1.55; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; resize:vertical; }
+  </style>
 
-    <!-- ── 1. GENERATE DECK ──  HIDDEN: requires Vercel Pro for 60s timeout. Re-enable if upgrading. -->
-    <div class="card" style="display:none;">
-      <div class="card-header" style="background:linear-gradient(90deg,var(--purple-light),transparent);">
-        <div class="card-title">✨ Generate Working Session Deck (Pro plan only)</div>
+  <!-- ════ SUB-TAB: ASK & HEALTH ════ -->
+  <div class="ai-subtab-content active" id="ai-sub-ask">
+  <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px;margin-bottom:20px;">
+
+    <!-- ASK THE DASHBOARD -->
+    <div class="card" style="border:2px solid var(--purple);">
+      <div class="card-header" style="background:linear-gradient(90deg,#F3E8FF,transparent);">
+        <div class="card-title">💬 Ask the Dashboard</div>
       </div>
       <div class="card-body">
-        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Claude reads your project state and builds a polished .pptx with status, priorities, action items, and next steps.</p>
-
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Meeting Title (optional)</label>
-        <input type="text" id="ai_deck_title" placeholder="e.g. Bookkeeping Working Session — May 1" style="margin-bottom:12px;">
-
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Focus Areas (optional, comma-separated)</label>
-        <input type="text" id="ai_deck_focus" placeholder="e.g. process map, onboarding sequence, Layer rollout" style="margin-bottom:14px;">
-
-        <div style="background:var(--gray-light);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:12px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;margin-bottom:8px;">Distribution</div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:6px;cursor:pointer;">
-            <input type="checkbox" id="ai_deck_drive" checked> Save to Google Drive
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:6px;cursor:pointer;">
-            <input type="checkbox" id="ai_deck_slack"> Post link to Slack
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;cursor:pointer;">
-            <input type="checkbox" id="ai_deck_email"> Email team (recipients in Settings)
-          </label>
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+          Type a natural-language question about the project. Claude has access to every task, action item, risk, decision, owner, milestone, and meeting.
+        </p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+          <button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="askDashPreset('What\'s blocking Phase 2?')">What's blocking Phase 2?</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="askDashPreset('Who has the most overdue tasks?')">Who's most overdue?</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="askDashPreset('Summarize what changed in the last 7 days.')">What changed this week?</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:11px;" onclick="askDashPreset('What are the top 3 risks I should flag to leadership?')">Top 3 risks for leadership</button>
         </div>
-
-        <button class="btn btn-primary" style="width:100%;" onclick="aiGenerateDeck()">
-          ✨ Generate Deck
+        <textarea id="ai_ask_input" rows="3" placeholder="Ask anything — e.g., 'Which tasks are most likely to slip?' or 'Draft a 2-sentence update for the CEO.'"
+          style="font-size:13px;margin-bottom:10px;"></textarea>
+        <button class="btn btn-primary" style="width:100%;" onclick="askDashboard()">
+          🔮 Ask Claude
         </button>
-        <div id="ai_deck_result" style="font-size:12px;color:var(--text-secondary);margin-top:10px;min-height:18px;"></div>
+        <div id="ai_ask_result" style="margin-top:12px;display:none;background:var(--gray-light);border-left:3px solid var(--purple);padding:12px 14px;border-radius:var(--radius-sm);font-size:13px;line-height:1.55;white-space:pre-wrap;"></div>
+        <div id="ai_ask_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
       </div>
     </div>
 
-    <!-- ── 2. PROCESS MEETING TRANSCRIPT ── -->
+    <!-- AUTO-RAG -->
+    <div class="card" style="border:2px solid var(--orange);">
+      <div class="card-header" style="background:linear-gradient(90deg,#FFF3E0,transparent);">
+        <div class="card-title">🚦 Auto-RAG Status</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+          Claude analyzes due dates, blockers, open risks, and launch checklist progress to recommend a defensible health rating.
+        </p>
+        <div style="background:var(--gray-light);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:10px;font-size:12px;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;margin-bottom:4px;">Current</div>
+          <div id="ai_rag_current" style="font-weight:700;">🟢 Green — All on track</div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;background:#F57C00;" onclick="suggestRag()">
+          🤖 Suggest RAG Status
+        </button>
+        <div id="ai_rag_result" style="margin-top:12px;display:none;background:#fff;border:2px solid var(--orange);padding:12px;border-radius:var(--radius-sm);font-size:13px;line-height:1.5;"></div>
+        <div id="ai_rag_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
+      </div>
+    </div>
+
+  </div>
+
+  </div>
+  <!-- ════ END SUB-TAB: ASK & HEALTH ════ -->
+
+  <!-- ════ SUB-TAB: REPORTS & BRIEFS ════ -->
+  <div class="ai-subtab-content" id="ai-sub-reports">
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+
+    <!-- MEETING PREP BRIEF -->
     <div class="card">
-      <div class="card-header" style="background:linear-gradient(90deg,var(--teal-light),transparent);">
-        <div class="card-title">📝 Process Meeting Transcript</div>
+      <div class="card-header" style="background:linear-gradient(90deg,#E0F2F1,transparent);">
+        <div class="card-title">📋 Meeting Prep Brief</div>
       </div>
       <div class="card-body">
-        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Paste a Fathom / Avoma transcript. Claude extracts decisions, action items, and risks — adds them to your project automatically.</p>
-
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Meeting Title</label>
-        <input type="text" id="ai_tx_title" placeholder="e.g. Bookkeeping sync — Apr 30" style="margin-bottom:10px;">
-
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Transcript</label>
-        <textarea id="ai_tx_text" rows="8" placeholder="Paste the full transcript here..." style="font-size:12px;margin-bottom:12px;"></textarea>
-
-        <div style="background:var(--gray-light);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:12px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;margin-bottom:8px;">What to extract</div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:6px;cursor:pointer;">
-            <input type="checkbox" id="ai_tx_actions" checked> Action items (added to project)
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:6px;cursor:pointer;">
-            <input type="checkbox" id="ai_tx_decisions" checked> Decisions (added to Decisions tab)
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:6px;cursor:pointer;">
-            <input type="checkbox" id="ai_tx_risks" checked> Risks (added to Risk Register)
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;cursor:pointer;">
-            <input type="checkbox" id="ai_tx_summary"> Meeting summary (added to Meeting Notes)
-          </label>
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Pick an upcoming meeting — Claude builds a 1-pager: agenda, recent decisions, open items for attendees, top risks.</p>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Upcoming Meeting</label>
+        <select id="ai_meet_pick" style="font-size:13px;margin-bottom:10px;"><option value="">Pick a meeting…</option></select>
+        <button class="btn btn-teal" style="width:100%;" onclick="generateMeetingPrep()">📋 Build Prep Brief</button>
+        <textarea id="ai_meet_result" class="ai-output" style="margin-top:10px;display:none;border-left-color:var(--teal);" placeholder="Output will appear here — edit before sending."></textarea>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="copyAiOutput('ai_meet_result')">📋 Copy</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="sendAiOutputEmail('ai_meet_result','Meeting Prep Brief')">📧 Email</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="sendAiOutputSlack('ai_meet_result','Meeting Prep Brief')">💬 Slack</button>
         </div>
-
-        <button class="btn btn-teal" style="width:100%;" onclick="aiProcessTranscript()">
-          📝 Process Transcript
-        </button>
-        <div id="ai_tx_result" style="font-size:12px;color:var(--text-secondary);margin-top:10px;min-height:18px;"></div>
+        <div id="ai_meet_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
       </div>
     </div>
 
-    <!-- ── 3. SEND STATUS UPDATE ── -->
+    <!-- DAILY STANDUP -->
+    <div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,#FFFDE7,transparent);">
+        <div class="card-title">☀️ Daily Standup Draft</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Drafts a standup grouped by owner: yesterday's completions, today's tasks, blockers.</p>
+        <button class="btn btn-teal" style="width:100%;" onclick="draftStandup()">☀️ Draft Today's Standup</button>
+        <textarea id="ai_standup_result" class="ai-output" style="margin-top:10px;display:none;border-left-color:var(--teal);" placeholder="Output will appear here — edit before sending."></textarea>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="copyAiOutput('ai_standup_result')">📋 Copy</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="sendAiOutputSlack('ai_standup_result','Daily Standup')">💬 Send Slack</button>
+        </div>
+        <div id="ai_standup_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+
+    <!-- WEEKLY DIGEST (replaces removed Digests tab) -->
+    <div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,#DBEAFE,transparent);">
+        <div class="card-title">📅 Weekly Digest</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Completed (last 7d), upcoming (next 7d), past-due, risks. Edit, then send to email or Slack.</p>
+        <button class="btn btn-teal" style="width:100%;" onclick="aiBuildWeekly()">📅 Build Weekly Digest</button>
+        <textarea id="ai_weekly_result" class="ai-output" style="margin-top:10px;display:none;border-left-color:#1E3A8A;" placeholder="Output will appear here — edit before sending."></textarea>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="copyAiOutput('ai_weekly_result')">📋 Copy</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="sendAiOutputEmail('ai_weekly_result','Weekly Digest')">📧 Email</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="sendAiOutputSlack('ai_weekly_result','Weekly Digest')">💬 Slack</button>
+        </div>
+        <div id="ai_weekly_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
+      </div>
+    </div>
+
+    <!-- DAILY DIGEST -->
+    <div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,#FEF3C7,transparent);">
+        <div class="card-title">🗓 Daily Digest</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">What's due today / next 3 days, what's past due, today's risks & blockers.</p>
+        <button class="btn btn-teal" style="width:100%;" onclick="aiBuildDaily()">🗓 Build Daily Digest</button>
+        <textarea id="ai_daily_result" class="ai-output" style="margin-top:10px;display:none;border-left-color:#92400E;" placeholder="Output will appear here — edit before sending."></textarea>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="copyAiOutput('ai_daily_result')">📋 Copy</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="sendAiOutputEmail('ai_daily_result','Daily Digest')">📧 Email</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="sendAiOutputSlack('ai_daily_result','Daily Digest')">💬 Slack</button>
+        </div>
+        <div id="ai_daily_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+
+    <!-- ONBOARDING BRIEF -->
+    <div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,#F1F8E9,transparent);">
+        <div class="card-title">🎒 Onboarding Brief</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Catch-up doc for someone newly joining the project: status, decisions, open AIs, key contacts.</p>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">New Person's Role (optional)</label>
+        <input type="text" id="ai_onb_role" placeholder="e.g. Incoming PSM, Project Manager" style="font-size:13px;margin-bottom:10px;">
+        <button class="btn btn-primary" style="width:100%;background:#558B2F;" onclick="generateOnboarding()">🎒 Build Catch-Up Brief</button>
+        <textarea id="ai_onb_result" class="ai-output" style="margin-top:10px;display:none;border-left-color:#558B2F;" placeholder="Output will appear here — edit before sending."></textarea>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="copyAiOutput('ai_onb_result')">📋 Copy</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="sendAiOutputEmail('ai_onb_result','Project Onboarding Brief')">📧 Email</button>
+        </div>
+        <div id="ai_onb_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
+      </div>
+    </div>
+
+    <!-- STATUS UPDATE (moved from old grid) -->
     <div class="card">
       <div class="card-header" style="background:linear-gradient(90deg,#FFF3E0,transparent);">
         <div class="card-title">📊 Send Status Update</div>
       </div>
       <div class="card-body">
-        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Claude drafts a weekly status update from current project data and sends to your team.</p>
-
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Audience</label>
-        <select id="ai_su_audience" style="margin-bottom:10px;">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Claude drafts a status update from current project data and sends to your team.</p>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Audience</label>
+        <select id="ai_su_audience" style="font-size:13px;margin-bottom:8px;">
           <option value="team">Team — operational detail</option>
           <option value="leadership">Leadership — exec summary</option>
           <option value="stakeholders">External stakeholders — high-level</option>
         </select>
-
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Cadence</label>
-        <select id="ai_su_cadence" style="margin-bottom:14px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Cadence</label>
+        <select id="ai_su_cadence" style="font-size:13px;margin-bottom:10px;">
           <option value="daily">Daily standup</option>
           <option value="weekly" selected>Weekly status</option>
           <option value="adhoc">Ad-hoc update</option>
         </select>
-
-        <div style="background:var(--gray-light);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:12px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;margin-bottom:8px;">Send via</div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:6px;cursor:pointer;">
-            <input type="checkbox" id="ai_su_slack" checked> Slack (channel in Settings)
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;cursor:pointer;">
-            <input type="checkbox" id="ai_su_email" checked> Email (recipients in Settings)
-          </label>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" id="ai_su_slack" checked> Slack</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" id="ai_su_email" checked> Email</label>
         </div>
-
-        <button class="btn btn-primary" style="width:100%;background:#F57C00;" onclick="aiSendStatusUpdate()">
-          📊 Draft & Send Status
-        </button>
-        <div id="ai_su_result" style="font-size:12px;color:var(--text-secondary);margin-top:10px;min-height:18px;"></div>
-      </div>
-    </div>
-
-    <!-- ── 4. QUICK SLACK / EMAIL ── -->
-    <div class="card">
-      <div class="card-header" style="background:linear-gradient(90deg,#E3F2FD,transparent);">
-        <div class="card-title">💬 Quick Message</div>
-      </div>
-      <div class="card-body">
-        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Send a one-off Slack post or email without generating a full deck or update.</p>
-
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Subject (email only)</label>
-        <input type="text" id="ai_qm_subject" placeholder="e.g. Bookkeeping — heads up" style="margin-bottom:10px;">
-
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Message</label>
-        <textarea id="ai_qm_body" rows="5" placeholder="Type your message here, or describe what you want to send and check 'Polish with Claude' below..." style="margin-bottom:10px;"></textarea>
-
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:12px;cursor:pointer;">
-          <input type="checkbox" id="ai_qm_polish"> ✨ Polish with Claude before sending
-        </label>
-
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-primary" style="flex:1;" onclick="aiQuickSend('slack')">💬 Send Slack</button>
-          <button class="btn btn-teal" style="flex:1;" onclick="aiQuickSend('email')">📧 Send Email</button>
-        </div>
-        <div id="ai_qm_result" style="font-size:12px;color:var(--text-secondary);margin-top:10px;min-height:18px;"></div>
+        <button class="btn btn-primary" style="width:100%;background:#F57C00;" onclick="aiSendStatusUpdate()">📊 Draft &amp; Send Status</button>
+        <div id="ai_su_result" style="font-size:11px;color:var(--text-secondary);margin-top:8px;min-height:14px;"></div>
       </div>
     </div>
 
   </div>
 
-  <!-- ── 5. SETTINGS ── -->
+  </div>
+  <!-- ════ END SUB-TAB: REPORTS & BRIEFS ════ -->
+
+  <!-- ════ SUB-TAB: DRAFTS & COMMS ════ -->
+  <div class="ai-subtab-content" id="ai-sub-drafts">
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+
+    <!-- PROPOSAL BUILDER (NEW) -->
+    <div class="card" style="border:2px solid var(--purple);">
+      <div class="card-header" style="background:linear-gradient(90deg,#F3E8FF,transparent);">
+        <div class="card-title">📄 Proposal Builder</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Generates a full project proposal in Moxie's standard format (Exec Summary, Current State, Goals, Scope, Timetable, Risks, Next Steps). Copy and paste into Google Docs.</p>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Project Context (optional, sharpens output)</label>
+        <textarea id="ai_proposal_context" rows="2" placeholder="What's the urgency? Any specific problem to highlight? Any constraints?" style="font-size:12px;margin-bottom:10px;"></textarea>
+        <button class="btn btn-primary" style="width:100%;" onclick="generateProposal()">📄 Build Proposal Draft</button>
+        <textarea id="ai_proposal_result" class="ai-output" style="margin-top:10px;display:none;min-height:280px;max-height:480px;" placeholder="Full proposal will appear here — edit before pasting into Google Docs."></textarea>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="copyAiOutput('ai_proposal_result')">📋 Copy for Google Docs</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="saveProposalLinkPrompt()">🔗 Save Doc Link</button>
+        </div>
+        <div id="ai_proposal_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
+      </div>
+    </div>
+
+    <!-- SOP DRAFT -->
+    <div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,#F3E8FF,transparent);">
+        <div class="card-title">📑 SOP Draft (Handoff)</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Generate a first-draft SOP from tasks, decisions, and notes. Edit then save to the Handoff tab.</p>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">SOP Focus (optional)</label>
+        <input type="text" id="ai_sop_focus" placeholder="e.g. Post-launch question routing, Churn off-boarding" style="font-size:13px;margin-bottom:10px;">
+        <button class="btn btn-primary" style="width:100%;" onclick="draftSop()">📑 Draft SOP</button>
+        <textarea id="ai_sop_result" class="ai-output" style="margin-top:10px;display:none;" placeholder="Output will appear here — edit before saving."></textarea>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="copyAiOutput('ai_sop_result')">📋 Copy</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="saveAiSopToHandoff()">💾 Save to Handoff</button>
+        </div>
+        <div id="ai_sop_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+
+    <!-- EMAIL RESPONSE DRAFTER -->
+    <div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,#FCE4EC,transparent);">
+        <div class="card-title">✉️ Email Response Drafter</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Paste an inbound "what's the status?" email — Claude drafts a reply using current dashboard state.</p>
+        <textarea id="ai_email_input" rows="4" placeholder="Paste the inbound email here..." style="font-size:12px;margin-bottom:10px;"></textarea>
+        <button class="btn btn-primary" style="width:100%;background:#AD1457;" onclick="draftEmailReply()">✉️ Draft Reply</button>
+        <textarea id="ai_email_result" class="ai-output" style="margin-top:10px;display:none;border-left-color:#AD1457;" placeholder="Reply will appear here — edit before sending."></textarea>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="copyAiOutput('ai_email_result')">📋 Copy</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;" onclick="sendAiOutputEmail('ai_email_result','Re: Project status')">📧 Send</button>
+        </div>
+        <div id="ai_email_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
+      </div>
+    </div>
+
+    <!-- QUICK MESSAGE -->
+    <div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,#E3F2FD,transparent);">
+        <div class="card-title">💬 Quick Message</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Send a one-off Slack post or email. Optionally polish with Claude before sending.</p>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Subject (email only)</label>
+        <input type="text" id="ai_qm_subject" placeholder="e.g. Bookkeeping — heads up" style="font-size:13px;margin-bottom:8px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Message</label>
+        <textarea id="ai_qm_body" rows="4" placeholder="Type your message, or describe what you want and check 'Polish with Claude'..." style="font-size:12px;margin-bottom:8px;"></textarea>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;margin-bottom:10px;cursor:pointer;">
+          <input type="checkbox" id="ai_qm_polish"> ✨ Polish with Claude before sending
+        </label>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary" style="flex:1;" onclick="aiQuickSend('slack')">💬 Send Slack</button>
+          <button class="btn btn-teal" style="flex:1;" onclick="aiQuickSend('email')">📧 Send Email</button>
+        </div>
+        <div id="ai_qm_result" style="font-size:11px;color:var(--text-secondary);margin-top:8px;min-height:14px;"></div>
+      </div>
+    </div>
+
+  </div>
+
+  </div>
+  <!-- ════ END SUB-TAB: DRAFTS & COMMS ════ -->
+
+  <!-- ════ SUB-TAB: SMART TOOLS ════ -->
+  <div class="ai-subtab-content" id="ai-sub-tools">
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+
+    <!-- AUTO-CATEGORIZE TASKS -->
+    <div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,#FFF3E0,transparent);">
+        <div class="card-title">🎯 Auto-Categorize Tasks</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">For tasks missing an owner or stuck on "Other" — Claude proposes the right team. Review, then bulk-apply.</p>
+        <div id="ai_cat_summary" style="background:var(--gray-light);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text-secondary);">Click scan to see how many tasks need a team.</div>
+        <button class="btn btn-primary" style="width:100%;background:#F57C00;" onclick="scanTaskTeams()">🔍 Scan &amp; Suggest Teams</button>
+        <div id="ai_cat_result" style="margin-top:10px;display:none;max-height:320px;overflow-y:auto;"></div>
+        <div id="ai_cat_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
+      </div>
+    </div>
+
+    <!-- DECISION LOGGER -->
+    <div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,#E3F2FD,transparent);">
+        <div class="card-title">🧾 Decision Logger</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Paste a Slack thread, transcript, or email — Claude extracts decisions + who approved. Logs to Decisions tab.</p>
+        <textarea id="ai_dec_input" rows="4" placeholder="Paste a Slack thread, meeting notes, or email chain..." style="font-size:12px;margin-bottom:10px;"></textarea>
+        <button class="btn btn-primary" style="width:100%;" onclick="extractDecisions()">🧾 Extract Decisions</button>
+        <div id="ai_dec_result" style="margin-top:10px;display:none;"></div>
+        <div id="ai_dec_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
+      </div>
+    </div>
+
+    <!-- READ SLACK CHANNEL (NEW) -->
+    <div class="card" style="border:2px solid #4A154B;">
+      <div class="card-header" style="background:linear-gradient(90deg,#F3E8FF,transparent);">
+        <div class="card-title">💬 Read Slack Channel</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Scan a Slack channel for the last N days — Claude proposes candidate tasks, decisions, and risks to add to this project.</p>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Channel</label>
+        <input type="text" id="ai_slackread_channel" placeholder="e.g. #bookkeeping-launch (defaults to project Slack channel)" style="font-size:13px;margin-bottom:8px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Days to look back</label>
+        <input type="number" id="ai_slackread_days" value="7" min="1" max="30" style="font-size:13px;margin-bottom:10px;">
+        <button class="btn btn-primary" style="width:100%;background:#4A154B;" onclick="readSlackChannel()">💬 Scan Channel</button>
+        <div id="ai_slackread_result" style="margin-top:10px;display:none;max-height:320px;overflow-y:auto;"></div>
+        <div id="ai_slackread_status" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
+      </div>
+    </div>
+
+    <!-- PROCESS MEETING TRANSCRIPT -->
+    <div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,var(--teal-light),transparent);">
+        <div class="card-title">📝 Process Transcript</div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Paste a Fathom/Avoma transcript. Claude extracts decisions, action items, and risks into the project.</p>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Meeting Title</label>
+        <input type="text" id="ai_tx_title" placeholder="e.g. Bookkeeping sync — Apr 30" style="font-size:13px;margin-bottom:8px;">
+        <textarea id="ai_tx_text" rows="6" placeholder="Paste the full transcript here..." style="font-size:11px;margin-bottom:8px;"></textarea>
+        <div style="background:var(--gray-light);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:8px;font-size:11px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:3px;"><input type="checkbox" id="ai_tx_actions" checked> Action items</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:3px;"><input type="checkbox" id="ai_tx_decisions" checked> Decisions</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:3px;"><input type="checkbox" id="ai_tx_risks" checked> Risks</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="ai_tx_summary"> Meeting summary</label>
+        </div>
+        <button class="btn btn-teal" style="width:100%;" onclick="aiProcessTranscript()">📝 Process Transcript</button>
+        <div id="ai_tx_result" style="font-size:11px;color:var(--text-secondary);margin-top:6px;min-height:14px;"></div>
+      </div>
+    </div>
+
+  </div>
+
+  </div>
+  <!-- ════ END SUB-TAB: SMART TOOLS ════ -->
+
+  <!-- ════ SUB-TAB: SETTINGS ════ -->
+  <div class="ai-subtab-content" id="ai-sub-settings">
+
+    <!-- Deck generator is hidden (Vercel Pro feature). Kept as no-op for legacy JS. -->
+    <div id="ai_deck_result"></div>
+  </div>
+
+  <!-- ── SETTINGS CARD ── -->
   <div class="card">
     <div class="card-header">
       <div class="card-title">⚙️ Settings · Recipients & Channels</div>
@@ -1417,8 +1636,15 @@
         </div>
       </div>
       <div style="margin-bottom:14px;">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Email Recipients (comma-separated)</label>
-        <textarea id="ai_set_recipients" rows="2" placeholder="leslie@joinmoxie.com, sol@layer.com, ben@layer.com, ceejay@joinmoxie.com" oninput="aiSettingsChange()" style="font-size:12px;"></textarea>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:6px;">Email Recipients — Toggle Per Send</label>
+        <p style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Stakeholder POCs auto-populate. Uncheck anyone who shouldn't get email sends. Add custom emails below.</p>
+        <div id="ai_recipient_list" style="background:var(--white);border:1px solid var(--border);border-radius:6px;max-height:260px;overflow-y:auto;"></div>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <input type="email" id="ai_recipient_new" placeholder="someone@example.com" style="flex:1;font-size:12px;" onkeydown="if(event.key==='Enter')addCustomRecipient()">
+          <button class="btn btn-secondary btn-sm" onclick="addCustomRecipient()" style="font-size:11px;">＋ Add</button>
+        </div>
+        <!-- legacy hidden textarea for back-compat with any inline scripts -->
+        <textarea id="ai_set_recipients" style="display:none;"></textarea>
         <div id="ai_poc_autoinclude" style="font-size:11px;color:var(--teal);margin-top:4px;font-weight:600;"></div>
       </div>
       <div style="margin-bottom:14px;">
@@ -1444,6 +1670,9 @@
       </div>
     </div>
   </div>
+
+  </div>
+  <!-- ════ END SUB-TAB: SETTINGS ════ -->
 
 </div>
 
@@ -1897,35 +2126,77 @@
       </div>
 
       <div style="margin-bottom:18px;">
-        <div style="font-size:14px;font-weight:700;color:var(--purple);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">🗂 The Tabs</div>
+        <div style="font-size:14px;font-weight:700;color:var(--purple);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">🗂 The Tabs (in order)</div>
         <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;">
-          <strong>📊 Dashboard</strong><span>Live summary — RAG status, task counts, flagged risks, upcoming due dates, project owners by team</span>
-          <strong>⚙️ Project Setup</strong><span>Project details, due date, lead, and the Stakeholder Plan (14 teams) with Included / Plan Shared checkboxes + POC names + emails</span>
-          <strong>🗂 Plan</strong><span>All tasks + action items grouped by phase. Inline edit due date, owner (autocompletes from stakeholder teams), priority, status. Click owner field → suggestions include teams first. Notes column captures "move reason" when relocating items.</span>
-          <strong>🧭 Workstreams</strong><span>Tasks + AIs grouped by TEAM (Sales, PSM, Onboarding, etc.) — auto-inferred from owners. Each team card shows progress, members, top open work.</span>
-          <strong>🚀 Launch Checklist</strong><span>Pre-built go-live checklist — check off each item, view examples, add notes, copy templates</span>
-          <strong>📝 Meeting Notes</strong><span>Log meetings — click a meeting card to edit notes, paste Fathom transcript, let AI extract action items / decisions / risks</span>
-          <strong>📅 Calendar</strong><span>Schedule meetings with Google Calendar — auto-generates Google Meet link, supports recurring (daily/weekly/biweekly/monthly), invites POCs (checkboxes), can add ad-hoc emails. Also: import existing Calendar events into the project.</span>
-          <strong>🤖 AI Assistant</strong><span>Process transcripts, draft status updates, send Slack/email, polish messages with Claude. Settings panel (per project): Slack channel, email recipients, CC list.</span>
-          <strong>🔗 Links</strong><span>Quick reference for important URLs — paste a link and it auto-pulls the page title. Group by category.</span>
-          <strong>📋 Decisions</strong><span>Log key decisions with context, owner, and date. Auto-populates when AI processes a transcript.</span>
-          <strong>📧 Digests & Briefs</strong><span>Generate weekly digest, daily standup, or pre-meeting brief from current project state</span>
-          <strong>⚠️ Risk Register</strong><span>Flag risks manually or from tasks. Tracks owner, likelihood, impact, mitigation plan.</span>
-          <strong>💰 Budget</strong><span>Track budget total, contingency, and line items by category</span>
-          <strong>🧩 Process Flow</strong><span>Link to Lucidchart/Miro/Figma diagrams + inline Mermaid diagram editor for quick process flows</span>
-          <strong>🤝 Handoff & SOPs</strong><span>New owner info, handoff checklist (with PM + new-owner signoffs), SOP list with statuses (Draft → Reviewed → Signed Off). Built-in SOP template.</span>
-          <strong>📄 Proposal Builder</strong><span>Build a formatted proposal from form fields, or link to an existing Google Doc proposal</span>
+          <strong>📊 Dashboard</strong><span>Live summary — RAG status, task counts, flagged risks, upcoming due dates, project owners by team. <strong>"✅ Complete Project →"</strong> button opens the launch checklist + handoff modal.</span>
+          <strong>🗂 Plan</strong><span>Tasks + action items grouped by phase. Inline edit owner, due date, priority, status. <strong>"✅ Complete Project →"</strong> button (top-right) opens the project signoff modal with Launch Checklist + Handoff &amp; SOPs.</span>
+          <strong>🧭 Workstreams</strong><span>Tasks + AIs grouped by TEAM. Owner is enforced as a team label only — clean roll-up by Sales, PSM, Onboarding, etc.</span>
+          <strong>📅 Calendar</strong><span>Schedule meetings with Google Calendar — auto-Meet link, recurring options, POC checkboxes. Import existing events.</span>
+          <strong>🤖 AI Assistant</strong><span><strong>Hub for all AI features</strong> — 5 sub-tabs: Ask &amp; Health · Reports &amp; Briefs · Drafts &amp; Comms · Smart Tools · Settings. See details below.</span>
+          <strong>⚠️ Risk Register</strong><span>Flag risks. Tracks owner, likelihood, impact, mitigation.</span>
+          <strong>🔗 Links</strong><span>Quick reference URLs — paste a link, auto-pulls page title.</span>
+          <strong>⚙️ Project Setup</strong><span>Project details + Stakeholder Plan (14 teams). <strong>🔒 Pre-Launch Checklist at top</strong> — 3 required items (Proposal, Stakeholder Alignment, Plan Created/Shared) that must be cleared before work begins.</span>
+          <strong>📋 Decisions</strong><span>Log key decisions with context, owner, date. Auto-populates from AI transcript processing.</span>
+          <strong>💰 Budget</strong><span>Budget total, contingency, line items by category.</span>
+          <strong>🧩 Process Flow</strong><span>Lucidchart/Miro/Figma links + inline Mermaid editor.</span>
+        </div>
+        <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:8px 12px;margin-top:10px;font-size:12px;color:#92400E;">
+          <strong>Removed nav tabs (features moved):</strong>
+          <ul style="margin:4px 0 0 0;padding-left:18px;">
+            <li>🚀 <em>Launch Checklist</em> + 🤝 <em>Handoff &amp; SOPs</em> → both now inside the <strong>"✅ Complete Project"</strong> modal (button on Plan or Dashboard)</li>
+            <li>📧 <em>Digests &amp; Briefs</em> → moved to AI Assistant &gt; <strong>Reports &amp; Briefs</strong></li>
+            <li>📄 <em>Proposal Builder</em> → moved to AI Assistant &gt; <strong>Drafts &amp; Comms</strong> (AI-powered, modeled on Moxie's template)</li>
+          </ul>
+        </div>
+        <div style="background:#FFF3E0;border:1px solid #F57C00;border-radius:6px;padding:8px 12px;margin-top:10px;font-size:12px;color:var(--orange);">
+          <strong>🔒 Pre-Launch Pattern:</strong> When you open the app, if any of the 3 pre-launch items are still unchecked, a popup nudges you to finish them on the Project Setup tab. Project work shouldn't begin until pre-launch is cleared.
         </div>
       </div>
 
       <div style="margin-bottom:18px;">
-        <div style="font-size:14px;font-weight:700;color:var(--purple);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">🤖 AI Assistant Capabilities</div>
-        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;">
-          <strong>📝 Process Transcript</strong><span>Paste any Fathom/Otter/Avoma transcript → Claude extracts action items, decisions, risks, summary. Auto-adds to project.</span>
-          <strong>📊 Send Status Update</strong><span>Pick audience (Team / Leadership / Stakeholders) and cadence (Daily / Weekly / Ad-hoc). Claude drafts and sends via Slack + email.</span>
-          <strong>💬 Quick Slack</strong><span>Send a one-off Slack message to the channel set in Settings. Optional Claude polish before sending.</span>
-          <strong>📧 Quick Email</strong><span>Send a one-off email. Subject auto-prefixes with [Project Name]. POCs auto-included.</span>
-          <strong>⚙️ Settings</strong><span>Slack channel, email recipients, CC list, from name. Saved per project, synced to teammates.</span>
+        <div style="font-size:14px;font-weight:700;color:var(--purple);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">🤖 AI Assistant — Full Feature Map</div>
+
+        <div style="font-size:13px;font-weight:700;color:var(--gray-dark);margin-top:10px;margin-bottom:4px;">💬 Ask &amp; Health</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px;">
+          <strong>Ask the Dashboard</strong><span>Natural-language Q&amp;A over your project. Try "What's blocking Phase 2?" or "Who's most overdue?"</span>
+          <strong>Auto-RAG Status</strong><span>Claude reads tasks/risks/dates and recommends Green/Amber/Red with reasoning. One-click apply.</span>
+        </div>
+
+        <div style="font-size:13px;font-weight:700;color:var(--gray-dark);margin-top:10px;margin-bottom:4px;">📋 Reports &amp; Briefs</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px;">
+          <strong>Meeting Prep Brief</strong><span>Pick an upcoming meeting → 1-page brief: agenda, recent decisions, open items, top risks. Editable, then send to email or Slack.</span>
+          <strong>Daily Standup</strong><span>Drafts a standup grouped by owner: yesterday / today / blockers. Send to Slack.</span>
+          <strong>Weekly Digest</strong><span>Completed (last 7d), upcoming (next 7d), past-due, risks. Edit, then send to email or Slack.</span>
+          <strong>Daily Digest</strong><span>What's due today/next 3 days, past due, today's risks &amp; blockers.</span>
+          <strong>Onboarding Brief</strong><span>Catch-up doc for someone newly joining the project. Status, decisions, open AIs, key contacts.</span>
+          <strong>Send Status Update</strong><span>Pick audience (Team/Leadership/Stakeholders) + cadence (Daily/Weekly/Ad-hoc). Drafts and sends via Slack + email.</span>
+        </div>
+
+        <div style="font-size:13px;font-weight:700;color:var(--gray-dark);margin-top:10px;margin-bottom:4px;">✍️ Drafts &amp; Comms</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px;">
+          <strong>📄 Proposal Builder</strong><span>Generates a full project proposal in Moxie's template format (Exec Summary, Current State, Goals, Scope, Timetable, Risks, Next Steps). Copy &amp; paste into Google Docs, then save the doc URL to Links.</span>
+          <strong>SOP Draft (Handoff)</strong><span>First-draft SOP from project tasks/decisions/notes. Edit + save to Handoff tab.</span>
+          <strong>Email Response Drafter</strong><span>Paste an inbound "what's the status?" email → AI drafts a reply grounded in live project state.</span>
+          <strong>Quick Message</strong><span>One-off Slack or email. Optional Claude polish before sending.</span>
+        </div>
+
+        <div style="font-size:13px;font-weight:700;color:var(--gray-dark);margin-top:10px;margin-bottom:4px;">🔧 Smart Tools</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px;">
+          <strong>Auto-Categorize Tasks</strong><span>Scans tasks missing an owner or assigned to "Other" — proposes the right team. Review &amp; bulk-apply.</span>
+          <strong>Decision Logger</strong><span>Paste a Slack thread, transcript, or email → AI extracts only decisions → bulk-add to Decisions tab.</span>
+          <strong>💬 Read Slack Channel</strong><span>Live-scans a Slack channel (last N days) — Claude proposes new tasks, decisions, and risks not yet in the project. Bulk-apply checked items.</span>
+          <strong>Process Transcript</strong><span>Paste any Fathom/Otter/Avoma transcript → extracts action items, decisions, risks, summary. Auto-adds to project.</span>
+        </div>
+
+        <div style="font-size:13px;font-weight:700;color:var(--gray-dark);margin-top:10px;margin-bottom:4px;">⚙️ Settings</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px;">
+          <strong>Slack Channel</strong><span>Where all AI Slack messages and pin-to-Slack posts land.</span>
+          <strong>Email Recipients</strong><span>Saved per project. Stakeholder POCs auto-included on top of this list.</span>
+          <strong>Pin to Slack</strong><span>One-click — posts a project info card (lead, due date, RAG, POCs, live link) to the channel + tries to auto-pin + add as bookmark.</span>
+        </div>
+
+        <div style="background:#F3E8FF;border-left:3px solid var(--purple);padding:8px 12px;margin-top:12px;font-size:11px;color:var(--purple);">
+          💡 <strong>Edit-then-send pattern:</strong> Every AI output is editable. Generate → tweak the text in the output box → click Send Email or Send Slack. Nothing sends until you click.
         </div>
       </div>
 
@@ -1999,6 +2270,69 @@
         💡 <strong>Tip:</strong> Bookmark your project's <strong>#proj_xxx</strong> URL so you can come back to it directly. Editing a task on the Plan tab moves it between phases via the Phase dropdown — you'll be prompted for a "Move Reason" which is logged to the task notes.
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PRE-LAUNCH NUDGE MODAL ═══ -->
+<div class="modal-overlay" id="prelaunchNudgeModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header" style="background:#FFF3E0;">
+      <div class="modal-title" style="color:var(--orange);">🔒 Pre-Launch Checklist Incomplete</div>
+      <button class="close-btn" onclick="closeModal('prelaunchNudgeModal')">✕</button>
+    </div>
+    <div style="padding:18px 24px 22px;">
+      <p style="font-size:13px;color:var(--gray-dark);margin-bottom:14px;">
+        Before this project's work can begin, you must complete the <strong>pre-launch checklist</strong> under Project Setup.
+      </p>
+      <div id="prelaunchNudgeItems" style="background:var(--gray-light);border-radius:6px;padding:12px;margin-bottom:14px;font-size:13px;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" style="flex:1;" onclick="closeModal('prelaunchNudgeModal'); switchTab('setup'); setTimeout(()=>document.getElementById('setupPrelaunchItems')?.scrollIntoView({behavior:'smooth'}), 300);">→ Go to Pre-Launch Checklist</button>
+        <button class="btn btn-secondary" onclick="closeModal('prelaunchNudgeModal'); window._prelaunchDismissedThisSession = true;">Dismiss for now</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ COMPLETE PROJECT MODAL — Launch Checklist + Handoff & SOPs ═══ -->
+<div class="modal-overlay" id="completeProjectModal">
+  <div class="modal" style="max-width:920px;max-height:92vh;overflow-y:auto;">
+    <div class="modal-header" style="background:linear-gradient(90deg,#D1FAE5,transparent);position:sticky;top:0;z-index:10;">
+      <div class="modal-title">✅ Complete Project — Launch Checklist + Handoff &amp; SOPs</div>
+      <button class="close-btn" onclick="closeModal('completeProjectModal')">✕</button>
+    </div>
+    <div style="padding:18px 24px 28px;">
+
+      <!-- Status banner -->
+      <div id="completeProjectStatusBanner" style="background:#F8FAFC;border-left:3px solid var(--teal);padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:13px;"></div>
+
+      <!-- Launch Checklist section -->
+      <div style="margin-bottom:24px;">
+        <h3 style="font-size:15px;font-weight:800;color:var(--gray-dark);margin-bottom:4px;">🚀 Launch Checklist</h3>
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Required items must be checked (or marked N/A) before this project is fully complete.</p>
+        <div style="background:var(--gray-light);border-radius:6px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <span style="font-size:12px;font-weight:600;color:var(--gray-dark);">Progress:</span>
+          <div style="flex:1;height:8px;background:var(--white);border-radius:4px;overflow:hidden;min-width:200px;">
+            <div id="launchProgressBar" style="height:100%;width:0%;background:var(--teal);transition:width .3s;"></div>
+          </div>
+          <span id="launchProgress" style="font-size:12px;font-weight:700;">0 / 0 (0%)</span>
+        </div>
+        <div id="launchChecklistItems"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button class="btn btn-secondary btn-sm" onclick="openAddChecklistItemForm()">＋ Add Custom Item</button>
+          <div id="addChecklistItemForm" style="display:none;flex:1;background:#fff;border:1px solid var(--border);padding:8px 10px;border-radius:6px;display:flex;gap:6px;flex-wrap:wrap;">
+            <input type="text" id="newClItemName" placeholder="Item name" style="flex:2;font-size:12px;">
+            <input type="text" id="newClItemDesc" placeholder="Description (optional)" style="flex:3;font-size:12px;">
+            <select id="newClItemRequired" style="font-size:12px;"><option value="false">Recommended</option><option value="true">Required</option></select>
+            <button class="btn btn-primary btn-sm" onclick="addCustomChecklistItem()">＋ Add</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Handoff & SOPs section -->
+      <div id="completeHandoffMount" style="border-top:2px solid var(--border);padding-top:16px;">
+        <!-- Filled in dynamically by openCompleteProjectModal() -->
+      </div>
     </div>
   </div>
 </div>
@@ -2318,7 +2652,7 @@ const STATUSES = ['Not Started', 'In Progress', 'At Risk', 'Done', 'Blocked', 'O
 
 const LAUNCH_CHECKLIST_TEMPLATE = [
   {
-    id: 'proposal', name: 'Project Proposal', required: true,
+    id: 'proposal', name: 'Project Proposal', required: true, phase: 'prelaunch',
     desc: 'Document outlining project scope, goals, stakeholders, timeline, and resources needed.',
     example: `PROJECT PROPOSAL — [Project Name]
 Date: [Date] | Lead: [Name] | Due Date: [Date]
@@ -2403,7 +2737,7 @@ APPROVALS NEEDED
 ☐ ___________  ☐ ___________  ☐ ___________`
   },
   {
-    id: 'stakeholder_align', name: 'Stakeholder Alignment Confirmed', required: true,
+    id: 'stakeholder_align', name: 'Stakeholder Alignment Confirmed', required: true, phase: 'prelaunch',
     desc: 'All key stakeholders have reviewed and aligned on the plan before work begins.',
     example: `STAKEHOLDER ALIGNMENT — What "confirmed" looks like:
 
@@ -2448,7 +2782,7 @@ Open questions/concerns and how they were resolved:
 3. `
   },
   {
-    id: 'project_plan', name: 'Project Plan Created & Shared', required: true,
+    id: 'project_plan', name: 'Project Plan Created & Shared', required: true, phase: 'prelaunch',
     desc: 'Detailed task list with owners, due dates, and statuses shared with all relevant teams.',
     example: `WHAT A GOOD PROJECT PLAN INCLUDES:
 
@@ -3093,6 +3427,10 @@ function init() {
     if (el) el.value = today;
   });
 
+  // Nudge user about pre-launch checklist if any item is unchecked.
+  // Fires ~1.5s after init so they see the dashboard first.
+  setTimeout(() => maybeShowPrelaunchNudge(), 1500);
+
   // Start auto-save MutationObserver after DOM is fully painted
   setTimeout(hookAutoSaveCalls, 500);
 
@@ -3119,8 +3457,12 @@ function switchTab(name) {
   if (name === 'actions')     renderActionItems();
   if (name === 'budget')      renderBudget();
   if (name === 'processflow') loadProcessFlow();
-  if (name === 'proposal')    loadExistingProposalUrl();
-  if (name === 'aiassistant') aiLoadSettings();
+  // Legacy proposal tab removed — Proposal Builder moved to AI Assistant > Drafts
+  if (name === 'aiassistant') {
+    aiLoadSettings();
+    if (typeof refreshAiRagCurrent === 'function') refreshAiRagCurrent();
+    if (typeof refreshMeetingPickList === 'function') refreshMeetingPickList();
+  }
   if (name === 'workstreams') renderWorkstreams();
   if (name === 'calendar')    renderCalendarTab();
   if (name === 'handoff')     loadHandoff();
@@ -3329,12 +3671,14 @@ function createProject() {
   // Assign a local project ID for multi-project storage
   currentProjectId = genLocalProjectId();
   closeModal('newProjectModal');
-  // Jump straight into the Launch Checklist — that's where the work starts
-  switchTab('launch');
+  // Jump to Project Setup — pre-launch checklist must be cleared before work begins
+  switchTab('setup');
   // Assign a Firebase project ID if live sync is already connected
   if (fbConnected) setFbProjectId(currentProjectId);
   doAutoSave();
-  showToast('Project "' + project.name + '" created — start with the Launch Checklist ↓');
+  showToast('Project "' + project.name + '" created — complete the pre-launch checklist below ↓');
+  // Open the pre-launch nudge so they see what's required
+  setTimeout(() => maybeShowPrelaunchNudge(), 500);
 
   // ── If user checked "Create Slack channel", fire it off (async, non-blocking) ──
   const slackToggle = document.getElementById('wCreateSlack');
@@ -3436,6 +3780,7 @@ function syncSetupForm() {
   document.getElementById('setupExternalDetail').value = project.externalDetail;
   document.getElementById('externalTeamDetail').style.display = project.externalTeam ? 'block' : 'none';
   buildStakeholderGrid('stakeholderGrid');
+  if (typeof renderPrelaunchOnSetup === 'function') renderPrelaunchOnSetup();
 }
 
 function saveSetup() {
@@ -4695,7 +5040,7 @@ function clearPlanFilters() {
   ['planFilterDueFrom','planFilterDueTo','planFilterStatus','planFilterOwner'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
-  ['planFilterMissingDue','planFilterPastDue'].forEach(id => {
+  ['planFilterMissingDue','planFilterPastDue','planFilterNextWeek'].forEach(id => {
     const el = document.getElementById(id); if (el) el.checked = false;
   });
   renderMilestones();
@@ -4741,9 +5086,13 @@ function renderMilestones() {
   const fDueTo      = document.getElementById('planFilterDueTo')?.value || '';
   const fMissingDue = document.getElementById('planFilterMissingDue')?.checked || false;
   const fPastDue    = document.getElementById('planFilterPastDue')?.checked || false;
+  const fNextWeek   = document.getElementById('planFilterNextWeek')?.checked || false;
   const fStatus     = document.getElementById('planFilterStatus')?.value || '';
   const fOwner      = document.getElementById('planFilterOwner')?.value || '';
-  const filterActive = fDueFrom || fDueTo || fMissingDue || fPastDue || fStatus || fOwner;
+  const filterActive = fDueFrom || fDueTo || fMissingDue || fPastDue || fNextWeek || fStatus || fOwner;
+
+  // "Next 7 days" window: today → today + 7 days, inclusive
+  const nextWeekMs = todayMs + 7 * 86400000;
 
   function applyFilters(items, isAi) {
     if (!filterActive) return items;
@@ -4755,6 +5104,12 @@ function renderMilestones() {
         if (new Date(due + 'T00:00:00').getTime() >= todayMs) return false;
         const doneStatus = isAi ? (item.status === 'Done') : (item.status === 'Done');
         if (doneStatus) return false;
+      }
+      if (fNextWeek) {
+        if (!due) return false;
+        const dueMs = new Date(due + 'T00:00:00').getTime();
+        if (dueMs < todayMs || dueMs > nextWeekMs) return false;
+        if (item.status === 'Done') return false;
       }
       if (fDueFrom && due && due < fDueFrom) return false;
       if (fDueTo && due && due > fDueTo) return false;
@@ -4840,14 +5195,18 @@ function renderMilestones() {
       const matches = cur === s.label || cur === label || (cur && cur.includes(s.label));
       opts.push(`<option value="${escHtml(s.label)}" ${matches?'selected':''}>${escHtml(label)}</option>`);
     });
-    // If current value doesn't match any team, preserve it as a "Custom" option
+    // Owner must be a team. If the current value isn't a known team, surface a warning option
+    // that forces the user to pick a real team (no more silent "Custom" passthroughs).
     const teamLabels = STAKEHOLDER_LIST.map(s => s.label);
-    const inferredTeam = cur ? inferTeams(cur) : [];
-    if (cur && !teamLabels.includes(cur) && inferredTeam[0] !== 'Other' && inferredTeam[0] !== 'Unassigned') {
-      // It already matched a team via inferTeams — show as auto-mapped
-      opts.push(`<option value="${escHtml(cur)}" selected>↪ ${escHtml(cur)} (→ ${escHtml(inferredTeam[0])})</option>`);
-    } else if (cur && !teamLabels.includes(cur)) {
-      opts.push(`<option value="${escHtml(cur)}" selected>⚠ ${escHtml(cur)} (custom — pick a team)</option>`);
+    if (cur && !teamLabels.includes(cur)) {
+      const inferred = inferTeams(cur)[0];
+      const isKnown = teamLabels.includes(inferred);
+      if (isKnown) {
+        // Auto-map to the inferred team — show as warning, default-selected to that team
+        opts.unshift(`<option value="" disabled>⚠ "${escHtml(cur)}" → pick the team:</option>`);
+      } else {
+        opts.unshift(`<option value="" disabled>⚠ Current owner "${escHtml(cur)}" is not a team — pick one:</option>`);
+      }
     }
     opts.push(`<option value="__multi__">＋ Multiple teams…</option>`);
     return opts.join('');
@@ -5527,11 +5886,119 @@ function buildLaunchChecklist() {
     }));
   }
   renderLaunchChecklist();
+  renderPrelaunchOnSetup();
+}
+
+// ── PRE-LAUNCH NUDGE on app load ──
+function maybeShowPrelaunchNudge() {
+  if (!hasProject) return;
+  if (window._prelaunchDismissedThisSession) return;
+  const items = getPrelaunchItems();
+  if (!items.length) return;
+  const open = items.filter(i => !i.checked && !i.na);
+  if (!open.length) return;
+  const list = open.map(i => `<div style="display:flex;align-items:center;gap:6px;margin:4px 0;">☐ <strong>${escHtml(i.name)}</strong></div>`).join('');
+  document.getElementById('prelaunchNudgeItems').innerHTML = list;
+  document.getElementById('prelaunchNudgeModal').classList.add('open');
+}
+
+// ── COMPLETE PROJECT MODAL ──
+function openCompleteProjectModal() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+
+  // Status banner — explain gating
+  const banner = document.getElementById('completeProjectStatusBanner');
+  const pre = prelaunchComplete();
+  const totalTasks = (project.tasks || []).length;
+  const doneTasks  = (project.tasks || []).filter(t => t.status === 'Done').length;
+  const allDone = totalTasks > 0 && doneTasks === totalTasks;
+  banner.innerHTML = `
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
+      <span>${pre ? '✅' : '⚠️'} Pre-launch: <strong>${pre ? 'cleared' : 'still incomplete'}</strong></span>
+      <span>${allDone ? '✅' : '⏳'} Tasks: <strong>${doneTasks}/${totalTasks} done</strong></span>
+    </div>
+    ${!pre ? '<div style="font-size:12px;color:var(--orange);margin-top:6px;">Pre-launch items still open — finish those on the Project Setup tab first.</div>' : ''}
+  `;
+
+  // Render the launch checklist into the modal
+  if (typeof renderLaunchChecklist === 'function') renderLaunchChecklist();
+
+  // Physically migrate the Handoff & SOPs DOM into the modal (one-time, preserves unique IDs).
+  // We move nodes rather than innerHTML-clone so the original IDs in JS handlers keep working.
+  const mount = document.getElementById('completeHandoffMount');
+  const sourceTab = document.getElementById('tab-handoff');
+  if (mount && sourceTab && !mount._handoffMigrated) {
+    mount.innerHTML = '<h3 style="font-size:15px;font-weight:800;color:var(--gray-dark);margin-bottom:12px;">🤝 Handoff &amp; SOPs</h3>';
+    while (sourceTab.firstChild) {
+      mount.appendChild(sourceTab.firstChild);
+    }
+    mount._handoffMigrated = true;
+  }
+  if (typeof loadHandoff === 'function') {
+    try { loadHandoff(); } catch (e) { console.warn('loadHandoff during modal open:', e); }
+  }
+
+  document.getElementById('completeProjectModal').classList.add('open');
+}
+
+// ── PHASE HELPERS ────────────────────────────────────────
+// Pre-launch items (must finish before work starts):
+//   Project Proposal, Stakeholder Alignment Confirmed, Project Plan Created & Shared
+// Everything else is a "launch" item (shown when user clicks Complete Project).
+const PRELAUNCH_IDS = ['proposal', 'stakeholder_align', 'project_plan'];
+function isPrelaunchItem(item) {
+  if (!item) return false;
+  if (item.phase === 'prelaunch') return true;
+  return PRELAUNCH_IDS.includes(item.id);
+}
+function isLaunchItem(item) { return !isPrelaunchItem(item); }
+function getPrelaunchItems() { return (project.launchChecklist || []).filter(isPrelaunchItem); }
+function getLaunchItems()    { return (project.launchChecklist || []).filter(isLaunchItem); }
+function prelaunchComplete() {
+  const items = getPrelaunchItems();
+  if (!items.length) return false;
+  return items.every(i => i.checked || i.na);
+}
+
+// ── PRE-LAUNCH SECTION on Setup tab ──
+function renderPrelaunchOnSetup() {
+  const container = document.getElementById('setupPrelaunchItems');
+  if (!container) return;
+  const items = getPrelaunchItems();
+  if (!items.length) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;">No pre-launch items yet — open or create a project first.</div>';
+    document.getElementById('setupPrelaunchProgress').textContent = '';
+    return;
+  }
+  const done = items.filter(i => i.checked || i.na).length;
+  const total = items.length;
+  const pct = Math.round((done / total) * 100);
+  const progEl = document.getElementById('setupPrelaunchProgress');
+  if (progEl) progEl.textContent = `${done}/${total} (${pct}%)` + (done === total ? ' ✓ Cleared to launch' : ' — blocking');
+
+  container.innerHTML = items.map(item => {
+    const isNA = !!item.na;
+    return `<div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;${isNA?'opacity:.45;':''}">
+      <input type="checkbox" ${item.checked && !isNA?'checked':''} ${isNA?'disabled':''} onchange="toggleChecklist('${item.id}', this.checked); renderPrelaunchOnSetup();" style="margin-top:3px;">
+      <div style="flex:1;">
+        <div style="font-weight:600;font-size:13px;color:var(--gray-dark);">${escHtml(item.name)} <span class="tag tag-required" style="margin-left:6px;">Required</span></div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">${escHtml(item.desc || '')}</div>
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+          ${item.example ? `<button class="cl-template-btn" onclick="toggleClPanel('${item.id}','example')">💡 Example</button>` : ''}
+          ${item.template ? `<button class="cl-template-btn" onclick="toggleClPanel('${item.id}','tmpl')">📋 Template</button>` : ''}
+          <button class="cl-template-btn" onclick="toggleClPanel('${item.id}','notes')" style="border-color:var(--teal);color:var(--teal);">📝 Notes${item.notes?' ✓':''}</button>
+        </div>
+        <div class="cl-template-panel" id="clpanel-setup-${item.id}"></div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderLaunchChecklist() {
   const container = document.getElementById('launchChecklistItems');
-  container.innerHTML = project.launchChecklist.map(item => {
+  if (!container) return;
+  // Render LAUNCH-phase items only (the standalone tab is now gone — this fills the modal)
+  container.innerHTML = getLaunchItems().map(item => {
     const isNA = !!item.na;
     const rowStyle = isNA ? 'opacity:0.45;' : '';
     return `
@@ -5648,11 +6115,14 @@ function toggleChecklist(id, checked) {
   const item = project.launchChecklist.find(i => i.id === id);
   if (item) { item.checked = checked; }
   renderLaunchChecklist();
+  // Keep the Pre-Launch section on Project Setup in sync
+  if (typeof renderPrelaunchOnSetup === 'function') renderPrelaunchOnSetup();
   updateDashboard();
-  // Final handoff step → jump to Handoff & SOPs tab when checked
+  triggerAutoSave();
+  // Final handoff step → open the Complete Project modal (where Handoff & SOPs lives)
   if (item && item.finalStep && checked) {
     showToast('✓ Final step — opening Handoff & SOPs…');
-    setTimeout(() => switchTab('handoff'), 400);
+    setTimeout(() => openCompleteProjectModal(), 400);
   }
 }
 
@@ -5708,14 +6178,18 @@ function deleteChecklistItem(id) {
 }
 
 function updateLaunchProgress() {
-  const active = project.launchChecklist.filter(i => !i.na); // exclude N/A items
+  // Operates on LAUNCH-phase items only (pre-launch is tracked separately on Setup tab)
+  const launchItems = getLaunchItems();
+  const active = launchItems.filter(i => !i.na); // exclude N/A items
   const total = active.length;
   const done = active.filter(i => i.checked).length;
-  const naCount = project.launchChecklist.filter(i => i.na).length;
+  const naCount = launchItems.filter(i => i.na).length;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   const naStr = naCount > 0 ? ` · ${naCount} N/A` : '';
-  document.getElementById('launchProgress').textContent = `${done} / ${total} complete (${pct}%)${naStr}`;
-  document.getElementById('launchProgressBar').style.width = pct + '%';
+  const progEl = document.getElementById('launchProgress');
+  const barEl  = document.getElementById('launchProgressBar');
+  if (progEl) progEl.textContent = `${done} / ${total} complete (${pct}%)${naStr}`;
+  if (barEl)  barEl.style.width = pct + '%';
 }
 
 // ═══════════════════════════════════════════════════════
@@ -5856,7 +6330,7 @@ ${extractDiscussionPoints(transcript)}
 ${'─'.repeat(60)}
 
 DECISIONS MADE
-${extractDecisions(transcript)}
+${extractDecisionsFromText(transcript)}
 
 ${'─'.repeat(60)}
 
@@ -5982,7 +6456,7 @@ function extractDiscussionPoints(text) {
   return fallback.length > 0 ? fallback.map(l => '• ' + l).join('\n') : '• See transcript for full discussion details.';
 }
 
-function extractDecisions(text) {
+function extractDecisionsFromText(text) {
   const decisionPattern = /decided|agreed|confirmed|approved|will proceed|go with|moving forward|conclusion|resolution|resolved|locked in|finalized|signed off|consensus|aligned on|going to|we will|plan is to|direction is|outcome:/i;
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 15 && decisionPattern.test(l));
   if (lines.length > 0) return lines.slice(0, 6).map(l => '• ' + l).join('\n');
@@ -7234,33 +7708,140 @@ function aiLoadSettings() {
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
   set('ai_set_slackchannel', s.slackChannel);
   set('ai_set_fromname',     s.fromName);
-  set('ai_set_recipients',   (s.recipients || []).join(', '));
   set('ai_set_cc',           (s.cc || []).join(', '));
+  aiRenderRecipientList();
   aiUpdatePocBadge();
 }
-function aiUpdatePocBadge() {
-  const el = document.getElementById('ai_poc_autoinclude');
-  if (!el) return;
+
+// ── Recipient list: per-email toggle, with stakeholder POCs auto-included ──
+// Storage model: project.aiSettings.recipientList = [{ email, label, source, enabled }]
+//   source: 'poc' (auto from stakeholders) | 'custom' (user-added)
+//   enabled: true/false — uncheck to exclude from this project's email sends
+function aiGetRecipientList() {
+  if (!project.aiSettings) project.aiSettings = {};
+  // Migrate from legacy `recipients` array if recipientList not yet set
+  if (!Array.isArray(project.aiSettings.recipientList)) {
+    const legacy = Array.isArray(project.aiSettings.recipients) ? project.aiSettings.recipients : [];
+    project.aiSettings.recipientList = legacy.map(e => ({
+      email: String(e).trim(), label: '', source: 'custom', enabled: true,
+    })).filter(r => r.email);
+  }
+
+  // Reconcile with current stakeholder POCs (add new ones, remove POCs no longer included)
+  const list = project.aiSettings.recipientList;
+  const pocEmails = new Set();
   const stakeholders = (project && project.stakeholders) || {};
-  const pocs = [];
   Object.keys(stakeholders).forEach(k => {
     const s = stakeholders[k];
     if (s && s.included && s.contactEmail && s.contactEmail.trim()) {
-      pocs.push({ team: k, email: s.contactEmail.trim() });
+      const email = s.contactEmail.trim().toLowerCase();
+      pocEmails.add(email);
+      // Add to list if missing
+      if (!list.some(r => r.email.toLowerCase() === email)) {
+        const team = (STAKEHOLDER_LIST.find(t => t.key === k) || {}).label || k;
+        list.push({
+          email: s.contactEmail.trim(),
+          label: (s.contactName || '') + (s.contactName ? ' · ' : '') + team,
+          source: 'poc',
+          enabled: true,
+        });
+      } else {
+        // Already in list — make sure source is poc and label is fresh
+        const row = list.find(r => r.email.toLowerCase() === email);
+        if (row.source !== 'custom') {
+          row.source = 'poc';
+          const team = (STAKEHOLDER_LIST.find(t => t.key === k) || {}).label || k;
+          row.label = (s.contactName || '') + (s.contactName ? ' · ' : '') + team;
+        }
+      }
     }
   });
-  if (pocs.length === 0) {
-    el.textContent = '';
+  // Drop poc-source rows whose stakeholder was removed/unincluded
+  project.aiSettings.recipientList = list.filter(r => r.source === 'custom' || pocEmails.has(r.email.toLowerCase()));
+
+  // Keep the legacy `recipients` field in sync (just enabled emails) for back-compat with old API code
+  project.aiSettings.recipients = project.aiSettings.recipientList.filter(r => r.enabled).map(r => r.email);
+  return project.aiSettings.recipientList;
+}
+
+function aiRenderRecipientList() {
+  const container = document.getElementById('ai_recipient_list');
+  if (!container) return;
+  const list = aiGetRecipientList();
+  if (!list.length) {
+    container.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--text-secondary);font-style:italic;">No recipients yet. Add POC emails on the Project Setup tab, or use ＋ Add below.</div>';
     return;
   }
-  el.innerHTML = `✓ Auto-includes <strong>${pocs.length}</strong> POC email${pocs.length>1?'s':''} from your Stakeholder Plan (${pocs.map(p=>p.email).join(', ')})`;
+  container.innerHTML = list.map((r, idx) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;${r.enabled?'':'opacity:.45;'}">
+      <input type="checkbox" ${r.enabled?'checked':''} onchange="aiToggleRecipient(${idx}, this.checked)" title="Include in email sends">
+      <div style="flex:1;min-width:0;">
+        <input type="text" value="${escHtml(r.email)}" onchange="aiUpdateRecipientEmail(${idx}, this.value)" style="font-size:12px;width:100%;border:none;background:transparent;padding:2px 0;font-family:monospace;">
+        ${r.label ? `<div style="font-size:10px;color:var(--text-secondary);margin-top:1px;">${escHtml(r.label)}${r.source==='poc'?' <span style="background:#E0E7FF;color:#3730A3;padding:1px 5px;border-radius:8px;font-weight:700;">POC</span>':''}</div>` : (r.source==='poc' ? '<div style="font-size:10px;color:#3730A3;font-weight:700;">POC</div>' : '<div style="font-size:10px;color:var(--text-secondary);">Custom</div>')}
+      </div>
+      <button class="btn-icon" onclick="aiRemoveRecipient(${idx})" title="Remove" style="font-size:13px;color:var(--text-secondary);">✕</button>
+    </div>`).join('');
 }
+
+function aiToggleRecipient(idx, checked) {
+  const list = aiGetRecipientList();
+  if (!list[idx]) return;
+  list[idx].enabled = checked;
+  project.aiSettings.recipients = list.filter(r => r.enabled).map(r => r.email);
+  aiRenderRecipientList();
+  triggerAutoSave();
+}
+function aiUpdateRecipientEmail(idx, value) {
+  const list = aiGetRecipientList();
+  if (!list[idx]) return;
+  list[idx].email = String(value || '').trim();
+  if (list[idx].source === 'poc') list[idx].source = 'custom'; // editing makes it custom
+  project.aiSettings.recipients = list.filter(r => r.enabled).map(r => r.email);
+  triggerAutoSave();
+}
+function aiRemoveRecipient(idx) {
+  const list = aiGetRecipientList();
+  if (!list[idx]) return;
+  list.splice(idx, 1);
+  project.aiSettings.recipients = list.filter(r => r.enabled).map(r => r.email);
+  aiRenderRecipientList();
+  triggerAutoSave();
+}
+function addCustomRecipient() {
+  const inp = document.getElementById('ai_recipient_new');
+  if (!inp) return;
+  const email = (inp.value || '').trim();
+  if (!email || !email.includes('@')) { showToast('Enter a valid email.', 'error'); return; }
+  const list = aiGetRecipientList();
+  if (list.some(r => r.email.toLowerCase() === email.toLowerCase())) {
+    showToast('Already in the list.', 'warn');
+    inp.value = '';
+    return;
+  }
+  list.push({ email, label: '', source: 'custom', enabled: true });
+  project.aiSettings.recipients = list.filter(r => r.enabled).map(r => r.email);
+  inp.value = '';
+  aiRenderRecipientList();
+  triggerAutoSave();
+  showToast('Recipient added.');
+}
+
+function aiUpdatePocBadge() {
+  const el = document.getElementById('ai_poc_autoinclude');
+  if (!el) return;
+  const list = aiGetRecipientList();
+  const enabled = list.filter(r => r.enabled);
+  const off = list.length - enabled.length;
+  el.innerHTML = `${enabled.length} active recipient${enabled.length!==1?'s':''}${off>0?` · <span style="color:var(--orange);">${off} muted</span>`:''}`;
+}
+
 function aiSettingsChange() {
   if (!project.aiSettings) project.aiSettings = {};
   project.aiSettings.slackChannel = document.getElementById('ai_set_slackchannel').value.trim();
   project.aiSettings.fromName     = document.getElementById('ai_set_fromname').value.trim();
-  project.aiSettings.recipients   = document.getElementById('ai_set_recipients').value.split(',').map(s=>s.trim()).filter(Boolean);
   project.aiSettings.cc           = document.getElementById('ai_set_cc').value.split(',').map(s=>s.trim()).filter(Boolean);
+  // Make sure the legacy `recipients` field reflects the toggled list
+  aiGetRecipientList();
   project.aiSettings.savedAt      = new Date().toISOString();
   triggerAutoSave();
 }
@@ -7285,18 +7866,21 @@ async function aiCallApi(action, payload) {
     action,
     payload,
     project: {
-      name:         project.name,
-      lead:         project.lead,
-      dueDate:      project.dueDate,
-      description:  project.description,
-      milestones:   project.milestones || [],
-      tasks:        project.tasks || [],
-      actionItems:  project.actionItems || [],
-      risks:        project.risks || [],
-      decisions:    project.decisions || [],
-      meetings:     project.meetings || [],
-      ragStatus:    project.ragStatus || {},
-      processFlow:  project.processFlow || {},
+      name:            project.name,
+      lead:            project.lead,
+      dueDate:         project.dueDate,
+      description:     project.description,
+      stakeholders:    project.stakeholders || {},
+      milestones:      project.milestones || [],
+      tasks:           project.tasks || [],
+      actionItems:     project.actionItems || [],
+      risks:           project.risks || [],
+      decisions:       project.decisions || [],
+      meetings:        project.meetings || [],
+      launchChecklist: project.launchChecklist || [],
+      links:           project.links || [],
+      ragStatus:       project.ragStatus || {},
+      processFlow:     project.processFlow || {},
     },
     settings: project.aiSettings || {},
     fbProjectId: (typeof fbProjectId !== 'undefined') ? fbProjectId : null,
@@ -7311,6 +7895,588 @@ async function aiCallApi(action, payload) {
     throw new Error(`API ${res.status}: ${text}`);
   }
   return await res.json();
+}
+
+// ═══════════════════════════════════════════════════════
+// ASK THE DASHBOARD — natural-language Q&A over project data
+// ═══════════════════════════════════════════════════════
+function askDashPreset(q) {
+  const el = document.getElementById('ai_ask_input');
+  el.value = q;
+  el.focus();
+  // Auto-fire if user clicked a preset
+  askDashboard();
+}
+
+async function askDashboard() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const question = document.getElementById('ai_ask_input').value.trim();
+  if (!question) { showToast('Type a question first.', 'error'); return; }
+  const statusEl = document.getElementById('ai_ask_status');
+  const resultEl = document.getElementById('ai_ask_result');
+  statusEl.textContent = '⏳ Claude is reading the project…';
+  statusEl.style.color = 'var(--text-secondary)';
+  resultEl.style.display = 'none';
+  try {
+    const r = await aiCallApi('ask-dashboard', { question });
+    resultEl.textContent = r.answer || '(no answer returned)';
+    resultEl.style.display = 'block';
+    statusEl.textContent = `✓ Answered · ${r.tokensUsed || ''} tokens · ${r.elapsedMs ? r.elapsedMs + 'ms' : ''}`;
+    statusEl.style.color = 'var(--green)';
+  } catch (e) {
+    statusEl.textContent = '✗ ' + e.message;
+    statusEl.style.color = 'var(--red)';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// AUTO-RAG — AI-recommended Green/Amber/Red health rating
+// ═══════════════════════════════════════════════════════
+function refreshAiRagCurrent() {
+  const el = document.getElementById('ai_rag_current');
+  if (!el || !hasProject) return;
+  const rag = (project.ragStatus && project.ragStatus.status) || 'Green';
+  const reason = (project.ragStatus && project.ragStatus.reason) || 'All on track';
+  const emoji = rag === 'Red' ? '🔴' : rag === 'Amber' ? '🟡' : '🟢';
+  el.innerHTML = `${emoji} <strong>${rag}</strong> — ${escHtml(reason)}`;
+}
+
+async function suggestRag() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const statusEl = document.getElementById('ai_rag_status');
+  const resultEl = document.getElementById('ai_rag_result');
+  statusEl.textContent = '⏳ Analyzing tasks, risks, and dates…';
+  statusEl.style.color = 'var(--text-secondary)';
+  resultEl.style.display = 'none';
+  try {
+    const r = await aiCallApi('suggest-rag', {});
+    const rag = r.status || 'Green';
+    const emoji = rag === 'Red' ? '🔴' : rag === 'Amber' ? '🟡' : '🟢';
+    const bg    = rag === 'Red' ? '#FEE2E2' : rag === 'Amber' ? '#FEF3C7' : '#D1FAE5';
+    const fg    = rag === 'Red' ? '#991B1B' : rag === 'Amber' ? '#92400E' : '#065F46';
+    const factorsHtml = (r.factors || []).map(f => `<li style="margin-bottom:3px;">${escHtml(f)}</li>`).join('');
+    resultEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="background:${bg};color:${fg};padding:6px 14px;border-radius:14px;font-weight:800;font-size:14px;">${emoji} ${escHtml(rag)}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);flex:1;">${escHtml(r.reason || '')}</div>
+      </div>
+      ${factorsHtml ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+        <div style="font-weight:700;text-transform:uppercase;letter-spacing:.5px;font-size:10px;margin-bottom:4px;">Key Factors</div>
+        <ul style="margin:0;padding-left:18px;">${factorsHtml}</ul>
+      </div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn btn-primary btn-sm" style="flex:1;" onclick="applyRagSuggestion('${escHtml(rag)}', \`${(r.reason||'').replace(/`/g,'\\\`').replace(/\\$/g,'\\\\$')}\`)">✓ Apply to Project</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('ai_rag_result').style.display='none'">Dismiss</button>
+      </div>
+    `;
+    resultEl.style.display = 'block';
+    statusEl.textContent = `✓ Suggested · ${r.elapsedMs ? r.elapsedMs + 'ms' : ''}`;
+    statusEl.style.color = 'var(--green)';
+  } catch (e) {
+    statusEl.textContent = '✗ ' + e.message;
+    statusEl.style.color = 'var(--red)';
+  }
+}
+
+function applyRagSuggestion(status, reason) {
+  if (!hasProject) return;
+  if (!project.ragStatus) project.ragStatus = {};
+  project.ragStatus.status = status;
+  project.ragStatus.reason = reason;
+  project.ragStatus.updatedAt = new Date().toISOString();
+  project.ragStatus.updatedBy = 'AI suggestion';
+  refreshAiRagCurrent();
+  if (typeof updateDashboard === 'function') updateDashboard();
+  triggerAutoSave();
+  showToast(`RAG status updated to ${status}.`);
+  document.getElementById('ai_rag_result').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════
+// AI SUB-TAB NAVIGATION
+// ═══════════════════════════════════════════════════════
+function switchAiSubTab(name) {
+  document.querySelectorAll('.ai-subtab-btn').forEach(b => b.classList.toggle('active', b.dataset.aisubtab === name));
+  document.querySelectorAll('.ai-subtab-content').forEach(c => c.classList.toggle('active', c.id === 'ai-sub-' + name));
+  // Trigger per-tab refresh hooks
+  if (name === 'reports' && typeof refreshMeetingPickList === 'function') refreshMeetingPickList();
+  if (name === 'ask'     && typeof refreshAiRagCurrent  === 'function') refreshAiRagCurrent();
+}
+
+// ═══════════════════════════════════════════════════════
+// SHARED HELPERS for AI cards (textarea-aware)
+// ═══════════════════════════════════════════════════════
+function getAiOutputText(elId) {
+  const el = document.getElementById(elId);
+  if (!el) return '';
+  if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') return el.value || '';
+  return el.textContent || '';
+}
+function setAiOutputText(elId, text) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') el.value = text;
+  else el.textContent = text;
+}
+function setAiStatus(id, msg, color) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = color || 'var(--text-secondary)';
+}
+function showAiResult(id, text) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  setAiOutputText(id, text);
+  el.style.display = 'block';
+}
+function copyAiOutput(elId) {
+  const text = getAiOutputText(elId);
+  if (!text) { showToast('Nothing to copy yet.', 'error'); return; }
+  navigator.clipboard.writeText(text).then(() => showToast('Copied!'));
+}
+async function sendAiOutputEmail(elId, subject) {
+  const text = getAiOutputText(elId);
+  if (!text) { showToast('Generate the output first.', 'error'); return; }
+  const esc = s => String(s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const html = `<div style="font-family:-apple-system,Segoe UI,sans-serif;font-size:13px;line-height:1.6;white-space:pre-wrap;">${esc(text)}</div>`;
+  try {
+    await aiCallApi('quick-send', { channel: 'email', subject, body: html, polish: false });
+    showToast('Emailed.');
+  } catch (e) { showToast('Email failed: ' + e.message, 'error'); }
+}
+async function sendAiOutputSlack(elId, title) {
+  const text = getAiOutputText(elId);
+  if (!text) { showToast('Generate the output first.', 'error'); return; }
+  const body = '*' + title + '*\n' + text;
+  try {
+    await aiCallApi('quick-send', { channel: 'slack', subject: '', body, polish: false });
+    showToast('Posted to Slack.');
+  } catch (e) { showToast('Slack failed: ' + e.message, 'error'); }
+}
+
+// ═══════════════════════════════════════════════════════
+// PROPOSAL BUILDER (uses uploaded Moxie template style)
+// ═══════════════════════════════════════════════════════
+async function generateProposal() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const context = document.getElementById('ai_proposal_context').value.trim();
+  setAiStatus('ai_proposal_status', '⏳ Building proposal (this takes ~15-30s)…');
+  try {
+    const r = await aiCallApi('build-proposal', { context });
+    showAiResult('ai_proposal_result', r.proposal || '(empty response)');
+    setAiStatus('ai_proposal_status', '✓ Drafted · ' + (r.elapsedMs || 0) + 'ms · paste into Google Docs', 'var(--green)');
+  } catch (e) {
+    setAiStatus('ai_proposal_status', '✗ ' + e.message, 'var(--red)');
+  }
+}
+function saveProposalLinkPrompt() {
+  const url = prompt('Paste the Google Docs URL for this proposal:');
+  if (!url) return;
+  if (!project.links) project.links = [];
+  project.links.push({
+    id: Date.now(),
+    title: 'Project Proposal — ' + (project.name || ''),
+    url: url.trim(),
+    category: 'Proposal',
+  });
+  if (typeof renderLinks === 'function') renderLinks();
+  triggerAutoSave();
+  showToast('✓ Proposal link saved to Links tab.');
+}
+
+// ═══════════════════════════════════════════════════════
+// WEEKLY / DAILY DIGEST (replace removed Digests tab)
+// ═══════════════════════════════════════════════════════
+function aiBuildWeekly() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  try {
+    const data = buildDigestData('weekly');
+    const text = renderDigestText(data, 'weekly');
+    showAiResult('ai_weekly_result', text);
+    setAiStatus('ai_weekly_status', '✓ Built — edit then send.', 'var(--green)');
+  } catch (e) {
+    setAiStatus('ai_weekly_status', '✗ ' + e.message, 'var(--red)');
+  }
+}
+function aiBuildDaily() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  try {
+    const data = buildDigestData('daily');
+    const text = renderDigestText(data, 'daily');
+    showAiResult('ai_daily_result', text);
+    setAiStatus('ai_daily_status', '✓ Built — edit then send.', 'var(--green)');
+  } catch (e) {
+    setAiStatus('ai_daily_status', '✗ ' + e.message, 'var(--red)');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// MEETING PREP BRIEF (Tier 2)
+// ═══════════════════════════════════════════════════════
+function refreshMeetingPickList() {
+  const sel = document.getElementById('ai_meet_pick');
+  if (!sel || !hasProject) return;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayMs = today.getTime();
+  const upcoming = (project.meetings || [])
+    .filter(m => m.date && new Date(m.date + 'T00:00:00').getTime() >= todayMs - 86400000)
+    .sort((a,b) => (a.date || '').localeCompare(b.date || ''));
+  sel.innerHTML = '<option value="">Pick a meeting…</option>' +
+    upcoming.map(m => {
+      const fmt = new Date(m.date + 'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+      return `<option value="${m.id}">${escHtml(fmt + ' — ' + (m.title || 'Untitled'))}</option>`;
+    }).join('');
+  if (upcoming.length === 0) {
+    sel.innerHTML = '<option value="">— No upcoming meetings (add one in Calendar) —</option>';
+  }
+}
+
+async function generateMeetingPrep() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const meetingId = document.getElementById('ai_meet_pick').value;
+  if (!meetingId) { showToast('Pick a meeting first.', 'error'); return; }
+  setAiStatus('ai_meet_status', '⏳ Building prep brief…');
+  try {
+    const r = await aiCallApi('meeting-prep-brief', { meetingId });
+    showAiResult('ai_meet_result', r.brief || '(empty response)');
+    setAiStatus('ai_meet_status', '✓ Built · ' + (r.elapsedMs || 0) + 'ms', 'var(--green)');
+  } catch (e) {
+    setAiStatus('ai_meet_status', '✗ ' + e.message, 'var(--red)');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// AUTO-CATEGORIZE TASKS (Tier 2)
+// ═══════════════════════════════════════════════════════
+async function scanTaskTeams() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const setStatus = (m, c) => setAiStatus('ai_cat_status', m, c);
+  setStatus('⏳ Claude is reviewing every task…');
+
+  // Find tasks that look "unmapped" — empty owner, "Other"/"Unassigned", or owner not in stakeholder list
+  const teamLabels = new Set(STAKEHOLDER_LIST.map(s => s.label.toLowerCase()));
+  const unmapped = (project.tasks || []).filter(t => {
+    const o = (t.owner || '').trim().toLowerCase();
+    if (!o) return true;
+    if (o === 'other' || o === 'unassigned') return true;
+    // Owner doesn't match any team label exactly — could be a person name (skip) or junk (include)
+    // Include if it doesn't match any known team AND doesn't match a stakeholder contact name
+    if (teamLabels.has(o)) return false;
+    return true; // flag for review
+  });
+
+  document.getElementById('ai_cat_summary').textContent =
+    unmapped.length === 0 ? 'All tasks already have a team. Nothing to suggest.' :
+    `${unmapped.length} task(s) need a team. Claude is suggesting matches…`;
+
+  if (unmapped.length === 0) {
+    setStatus('✓ Nothing to fix.', 'var(--green)');
+    document.getElementById('ai_cat_result').style.display = 'none';
+    return;
+  }
+
+  try {
+    const r = await aiCallApi('suggest-task-teams', { taskIds: unmapped.map(t => t.id) });
+    const suggestions = r.suggestions || [];
+    if (!suggestions.length) {
+      setStatus('No suggestions returned.', 'var(--orange)');
+      return;
+    }
+    // Render review list with per-row team dropdown + accept/skip
+    const teamOpts = STAKEHOLDER_LIST.map(s => s.label);
+    const rows = suggestions.map(s => {
+      const t = (project.tasks || []).find(x => x.id === s.taskId);
+      if (!t) return '';
+      const sug = s.suggestedTeam || 'Other';
+      const conf = s.confidence ? ` (${s.confidence})` : '';
+      const reason = s.reason ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;font-style:italic;">${escHtml(s.reason)}</div>` : '';
+      return `<div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;font-size:12px;">
+        <div style="font-weight:600;margin-bottom:4px;">${escHtml(t.task || '—')}</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">Current: ${escHtml(t.owner || '(empty)')}</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:11px;color:var(--text-secondary);">→</span>
+          <select id="ai_cat_pick_${t.id}" style="font-size:12px;flex:1;">
+            ${teamOpts.map(opt => `<option value="${escHtml(opt)}" ${opt===sug?'selected':''}>${escHtml(opt)}</option>`).join('')}
+          </select>
+          <span style="font-size:10px;color:var(--purple);font-weight:700;">${escHtml(conf)}</span>
+        </div>
+        ${reason}
+      </div>`;
+    }).join('');
+    document.getElementById('ai_cat_result').innerHTML = rows +
+      `<div style="display:flex;gap:6px;margin-top:8px;position:sticky;bottom:0;background:#fff;padding-top:6px;">
+        <button class="btn btn-primary btn-sm" style="flex:1;font-size:11px;" onclick='applyAllTaskTeams(${JSON.stringify(suggestions.map(s=>s.taskId))})'>✓ Accept All Visible</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('ai_cat_result').style.display='none'">Dismiss</button>
+      </div>`;
+    document.getElementById('ai_cat_result').style.display = 'block';
+    setStatus('✓ ' + suggestions.length + ' suggestions · ' + (r.elapsedMs || 0) + 'ms', 'var(--green)');
+  } catch (e) {
+    setStatus('✗ ' + e.message, 'var(--red)');
+  }
+}
+function applyAllTaskTeams(taskIds) {
+  if (!Array.isArray(taskIds)) return;
+  let count = 0;
+  taskIds.forEach(id => {
+    const sel = document.getElementById('ai_cat_pick_' + id);
+    if (!sel || !sel.value) return;
+    const t = project.tasks.find(x => x.id === id);
+    if (!t) return;
+    t.owner = sel.value;
+    t.updatedAt = new Date().toISOString();
+    count++;
+  });
+  document.getElementById('ai_cat_result').style.display = 'none';
+  document.getElementById('ai_cat_summary').textContent = `Applied ${count} team assignments.`;
+  if (typeof renderTasks === 'function') renderTasks();
+  if (typeof renderMilestones === 'function') renderMilestones();
+  triggerAutoSave();
+  showToast(`✓ ${count} tasks updated.`);
+}
+
+// ═══════════════════════════════════════════════════════
+// SOP DRAFT (Tier 2)
+// ═══════════════════════════════════════════════════════
+async function draftSop() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const focus = document.getElementById('ai_sop_focus').value.trim();
+  setAiStatus('ai_sop_status', '⏳ Drafting SOP…');
+  try {
+    const r = await aiCallApi('draft-sop', { focus });
+    showAiResult('ai_sop_result', r.sop || '(empty response)');
+    setAiStatus('ai_sop_status', '✓ Drafted · ' + (r.elapsedMs || 0) + 'ms', 'var(--green)');
+  } catch (e) {
+    setAiStatus('ai_sop_status', '✗ ' + e.message, 'var(--red)');
+  }
+}
+function saveAiSopToHandoff() {
+  const text = (document.getElementById('ai_sop_result')?.textContent) || '';
+  if (!text) { showToast('Draft the SOP first.', 'error'); return; }
+  if (!project.handoff) project.handoff = {};
+  if (!project.handoff.sops) project.handoff.sops = [];
+  project.handoff.sops.push({
+    id: Date.now(),
+    title: (document.getElementById('ai_sop_focus').value.trim() || 'AI-drafted SOP'),
+    content: text,
+    createdAt: new Date().toISOString(),
+    createdBy: 'AI',
+  });
+  triggerAutoSave();
+  showToast('✓ Saved to Handoff & SOPs tab.');
+  setAiStatus('ai_sop_status', '✓ Saved to Handoff & SOPs.', 'var(--green)');
+}
+
+// ═══════════════════════════════════════════════════════
+// DAILY STANDUP (Tier 3)
+// ═══════════════════════════════════════════════════════
+async function draftStandup() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  setAiStatus('ai_standup_status', '⏳ Drafting standup…');
+  try {
+    const r = await aiCallApi('draft-standup', {});
+    showAiResult('ai_standup_result', r.standup || '(empty response)');
+    setAiStatus('ai_standup_status', '✓ Drafted · ' + (r.elapsedMs || 0) + 'ms', 'var(--green)');
+  } catch (e) {
+    setAiStatus('ai_standup_status', '✗ ' + e.message, 'var(--red)');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// DECISION LOGGER (Tier 3)
+// ═══════════════════════════════════════════════════════
+async function extractDecisions() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const threadText = document.getElementById('ai_dec_input').value.trim();
+  if (!threadText) { showToast('Paste a thread, transcript, or email first.', 'error'); return; }
+  setAiStatus('ai_dec_status', '⏳ Extracting decisions…');
+  try {
+    const r = await aiCallApi('extract-decisions', { threadText });
+    const decisions = r.decisions || [];
+    if (!decisions.length) {
+      document.getElementById('ai_dec_result').innerHTML = '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;padding:8px;">No decisions detected in that content.</div>';
+      document.getElementById('ai_dec_result').style.display = 'block';
+      setAiStatus('ai_dec_status', '✓ Scanned · 0 decisions found', 'var(--orange)');
+      return;
+    }
+    const rows = decisions.map((d, idx) => `<div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;font-size:12px;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="ai_dec_pick_${idx}" checked style="margin-top:3px;">
+        <div style="flex:1;">
+          <div style="font-weight:600;">${escHtml(d.decision || '—')}</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${escHtml(d.decidedBy || 'Decider TBD')} · ${escHtml(d.date || '')}</div>
+        </div>
+      </label>
+    </div>`).join('');
+    document.getElementById('ai_dec_result').innerHTML = rows +
+      `<div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="btn btn-primary btn-sm" style="flex:1;font-size:11px;" onclick='addExtractedDecisions(${JSON.stringify(decisions)})'>✓ Add Checked to Decisions Tab</button>
+      </div>`;
+    document.getElementById('ai_dec_result').style.display = 'block';
+    setAiStatus('ai_dec_status', '✓ Found ' + decisions.length + ' · ' + (r.elapsedMs || 0) + 'ms', 'var(--green)');
+  } catch (e) {
+    setAiStatus('ai_dec_status', '✗ ' + e.message, 'var(--red)');
+  }
+}
+function addExtractedDecisions(decisions) {
+  if (!Array.isArray(decisions)) return;
+  let added = 0;
+  decisions.forEach((d, idx) => {
+    const cb = document.getElementById('ai_dec_pick_' + idx);
+    if (!cb || !cb.checked) return;
+    if (!project.decisions) project.decisions = [];
+    project.decisions.push({
+      id: (typeof decisionIdCounter !== 'undefined' ? decisionIdCounter++ : Date.now()),
+      decision: d.decision || '',
+      decidedBy: d.decidedBy || '',
+      date: d.date || new Date().toISOString().split('T')[0],
+      context: d.context || '',
+      source: 'AI extracted',
+    });
+    added++;
+  });
+  if (typeof renderDecisions === 'function') renderDecisions();
+  triggerAutoSave();
+  showToast(`✓ Added ${added} decision${added!==1?'s':''}.`);
+  document.getElementById('ai_dec_input').value = '';
+  document.getElementById('ai_dec_result').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════
+// ONBOARDING BRIEF (Tier 3)
+// ═══════════════════════════════════════════════════════
+async function generateOnboarding() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const role = document.getElementById('ai_onb_role').value.trim();
+  setAiStatus('ai_onb_status', '⏳ Drafting catch-up brief…');
+  try {
+    const r = await aiCallApi('onboarding-brief', { role });
+    showAiResult('ai_onb_result', r.brief || '(empty response)');
+    setAiStatus('ai_onb_status', '✓ Drafted · ' + (r.elapsedMs || 0) + 'ms', 'var(--green)');
+  } catch (e) {
+    setAiStatus('ai_onb_status', '✗ ' + e.message, 'var(--red)');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// READ SLACK CHANNEL — scan a channel for candidate tasks/decisions/risks
+// ═══════════════════════════════════════════════════════
+async function readSlackChannel() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  let channel = document.getElementById('ai_slackread_channel').value.trim();
+  if (!channel) channel = (project.aiSettings && project.aiSettings.slackChannel) || '';
+  if (!channel) { showToast('Enter a channel (or set one in Settings).', 'error'); return; }
+  const days = Math.max(1, Math.min(30, parseInt(document.getElementById('ai_slackread_days').value, 10) || 7));
+  setAiStatus('ai_slackread_status', '⏳ Reading #' + channel.replace(/^#/, '') + ' (last ' + days + 'd)…');
+  document.getElementById('ai_slackread_result').style.display = 'none';
+  try {
+    const r = await aiCallApi('read-slack-channel', { channel, days });
+    const items = r.candidates || {};
+    const ts = (items.tasks || []), ds = (items.decisions || []), rs = (items.risks || []);
+    if (!ts.length && !ds.length && !rs.length) {
+      document.getElementById('ai_slackread_result').innerHTML = '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;padding:8px;">No new tasks, decisions, or risks detected in the scan window.</div>';
+      document.getElementById('ai_slackread_result').style.display = 'block';
+      setAiStatus('ai_slackread_status', '✓ Scanned ' + (r.messageCount || 0) + ' messages · nothing to add', 'var(--orange)');
+      return;
+    }
+    const renderList = (arr, kind, color) => arr.length ? `
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:${color};margin-bottom:4px;">${kind} (${arr.length})</div>
+        ${arr.map((item, idx) => `<label style="display:flex;align-items:flex-start;gap:6px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:4px;font-size:12px;cursor:pointer;">
+          <input type="checkbox" id="ai_slackread_${kind}_${idx}" checked style="margin-top:2px;">
+          <div style="flex:1;">
+            <div style="font-weight:600;">${escHtml(item.text || item.task || item.decision || item.risk || '')}</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${escHtml(item.owner || item.decidedBy || '')}${item.dueDate ? ' · due ' + escHtml(item.dueDate) : ''}${item.context ? ' · ' + escHtml(item.context) : ''}</div>
+          </div>
+        </label>`).join('')}
+      </div>` : '';
+    document.getElementById('ai_slackread_result').innerHTML =
+      renderList(ts, 'Tasks', 'var(--purple)') +
+      renderList(ds, 'Decisions', '#1565C0') +
+      renderList(rs, 'Risks', 'var(--red)') +
+      `<div style="display:flex;gap:6px;margin-top:8px;position:sticky;bottom:0;background:#fff;padding-top:6px;">
+        <button class="btn btn-primary btn-sm" style="flex:1;font-size:11px;" onclick='applySlackCandidates(${JSON.stringify({tasks:ts,decisions:ds,risks:rs})})'>✓ Add Checked to Project</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('ai_slackread_result').style.display='none'">Dismiss</button>
+      </div>`;
+    document.getElementById('ai_slackread_result').style.display = 'block';
+    setAiStatus('ai_slackread_status', `✓ Found ${ts.length} tasks · ${ds.length} decisions · ${rs.length} risks · ${r.elapsedMs || 0}ms`, 'var(--green)');
+  } catch (e) {
+    setAiStatus('ai_slackread_status', '✗ ' + e.message, 'var(--red)');
+  }
+}
+function applySlackCandidates(data) {
+  if (!data) return;
+  let added = 0;
+  (data.tasks || []).forEach((t, idx) => {
+    const cb = document.getElementById('ai_slackread_Tasks_' + idx);
+    if (!cb || !cb.checked) return;
+    project.tasks = project.tasks || [];
+    project.tasks.push({
+      id: (typeof taskIdCounter !== 'undefined' ? taskIdCounter++ : Date.now()),
+      milestoneId: null, category: '',
+      task: t.text || t.task || '',
+      owner: t.owner || '',
+      dueDate: t.dueDate || '',
+      status: 'Not Started',
+      notes: t.context ? ('From Slack: ' + t.context) : 'From Slack scan',
+      flaggedRisk: false, riskDetail: '',
+    });
+    added++;
+  });
+  (data.decisions || []).forEach((d, idx) => {
+    const cb = document.getElementById('ai_slackread_Decisions_' + idx);
+    if (!cb || !cb.checked) return;
+    project.decisions = project.decisions || [];
+    project.decisions.push({
+      id: (typeof decisionIdCounter !== 'undefined' ? decisionIdCounter++ : Date.now()),
+      decision: d.text || d.decision || '',
+      decidedBy: d.decidedBy || '',
+      date: d.date || new Date().toISOString().split('T')[0],
+      context: d.context || '',
+      source: 'Slack scan',
+    });
+    added++;
+  });
+  (data.risks || []).forEach((r, idx) => {
+    const cb = document.getElementById('ai_slackread_Risks_' + idx);
+    if (!cb || !cb.checked) return;
+    project.risks = project.risks || [];
+    project.risks.push({
+      id: (typeof riskIdCounter !== 'undefined' ? riskIdCounter++ : Date.now()),
+      linkedTaskId: null,
+      risk: r.text || r.risk || '',
+      owner: r.owner || '',
+      impact: r.impact || 'Med',
+      likelihood: r.likelihood || 'Med',
+      status: 'Open',
+      mitigation: r.mitigation || '',
+    });
+    added++;
+  });
+  if (typeof renderTasks === 'function') renderTasks();
+  if (typeof renderMilestones === 'function') renderMilestones();
+  if (typeof renderDecisions === 'function') renderDecisions();
+  if (typeof renderRisks === 'function') renderRisks();
+  triggerAutoSave();
+  document.getElementById('ai_slackread_result').style.display = 'none';
+  showToast(`✓ Added ${added} item${added!==1?'s':''} from Slack.`);
+}
+
+// ═══════════════════════════════════════════════════════
+// EMAIL RESPONSE DRAFTER (Tier 3)
+// ═══════════════════════════════════════════════════════
+async function draftEmailReply() {
+  if (!hasProject) { showToast('Open a project first.', 'error'); return; }
+  const incoming = document.getElementById('ai_email_input').value.trim();
+  if (!incoming) { showToast('Paste the inbound email first.', 'error'); return; }
+  setAiStatus('ai_email_status', '⏳ Drafting reply…');
+  try {
+    const r = await aiCallApi('draft-email-reply', { incoming });
+    showAiResult('ai_email_result', r.reply || '(empty response)');
+    setAiStatus('ai_email_status', '✓ Drafted · ' + (r.elapsedMs || 0) + 'ms', 'var(--green)');
+  } catch (e) {
+    setAiStatus('ai_email_status', '✗ ' + e.message, 'var(--red)');
+  }
 }
 
 // ── 1. GENERATE DECK ────────────────────────────────
@@ -8205,8 +9371,10 @@ function loadMermaidExample() {
 let generatedProposalText = '';
 let proposalSuggestedTasks = [];
 
-function generateProposal() {
-  const name     = document.getElementById('prop_name').value.trim();
+// LEGACY — old form-based proposal builder. Replaced by AI-powered generateProposal() in AI Assistant > Drafts.
+// Kept as no-op stub to avoid runtime errors from any leftover references.
+function legacyGenerateProposal_DEPRECATED() {
+  const name     = document.getElementById('prop_name')?.value?.trim?.();
   const lead     = document.getElementById('prop_lead').value.trim();
   const date     = document.getElementById('prop_date').value;
   const problem  = document.getElementById('prop_problem').value.trim();
@@ -8738,13 +9906,20 @@ function prefillProposalFromUpload() {
   if (!d) return;
   if (d.name)    document.getElementById('prop_name').value    = d.name;
   if (d.problem) document.getElementById('prop_problem').value = d.problem;
-  if (d.solution)document.getElementById('prop_solution').value= d.solution;
-  if (d.goals)   document.getElementById('prop_goals').value   = d.goals;
-  if (d.risks)   document.getElementById('prop_risks').value   = d.risks;
-  if (d.teams)   document.getElementById('prop_teams').value   = d.teams;
-  if (d.date)    document.getElementById('prop_date').value    = d.date;
-  switchTab('proposal');
-  showToast('Proposal Builder pre-filled from your document!');
+  // Legacy proposal builder removed — redirect to AI Assistant Drafts and pre-fill the context box
+  const ctxEl = document.getElementById('ai_proposal_context');
+  if (ctxEl) {
+    const lines = [];
+    if (d.problem)  lines.push('Problem: '  + d.problem);
+    if (d.solution) lines.push('Solution: ' + d.solution);
+    if (d.goals)    lines.push('Goals: '    + d.goals);
+    if (d.risks)    lines.push('Risks: '    + d.risks);
+    if (d.teams)    lines.push('Teams: '    + d.teams);
+    ctxEl.value = lines.join('\n');
+  }
+  switchTab('aiassistant');
+  setTimeout(() => { if (typeof switchAiSubTab === 'function') switchAiSubTab('drafts'); }, 100);
+  showToast('Context loaded — click "Build Proposal Draft" in the AI Assistant.');
 }
 
 function prefillProjectSetupFromUpload() {
