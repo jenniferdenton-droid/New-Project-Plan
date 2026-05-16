@@ -1141,9 +1141,33 @@ Now propose new candidate tasks, decisions, and risks. Return JSON only.`;
 // ════════════════════════════════════════════════════════════════
 // PM AI SCAN — health score + duplicate detection + gap analysis
 // ════════════════════════════════════════════════════════════════
-async function pmAiScan({ project }) {
+async function pmAiScan({ project, settings, lastScanAt }) {
   const t0 = Date.now();
   const snapshot = buildProjectSnapshot(project);
+
+  // ── Bonus pass: if a Slack channel is configured, also scan it since the last
+  //    health check for candidate tasks/risks the user may have missed.
+  let slackCandidates = null;
+  const slackChannel = (settings && settings.slackChannel) || (project.aiSettings && project.aiSettings.slackChannel) || '';
+  if (slackChannel && process.env.SLACK_BOT_TOKEN) {
+    try {
+      // Default to 7 days back if no prior scan timestamp
+      const sinceMs = lastScanAt ? new Date(lastScanAt).getTime() : (Date.now() - 7 * 86400000);
+      const daysBack = Math.max(1, Math.min(30, Math.ceil((Date.now() - sinceMs) / 86400000)));
+      const slackRes = await readSlackChannel({ channel: slackChannel, days: daysBack, project });
+      slackCandidates = {
+        channel: slackChannel.replace(/^#/, ''),
+        daysScanned: daysBack,
+        messageCount: slackRes.messageCount || 0,
+        tasks: slackRes.candidates?.tasks || [],
+        decisions: slackRes.candidates?.decisions || [],
+        risks: slackRes.candidates?.risks || [],
+      };
+    } catch (e) {
+      // Don't fail the whole scan if Slack errors
+      slackCandidates = { error: e.message };
+    }
+  }
 
   // Fast deterministic pass: find candidate duplicate pairs via token-overlap similarity
   const tasks = (project.tasks || []).filter(t => t.task && t.task.trim());
@@ -1230,8 +1254,90 @@ Now run the PM audit. Return ONLY the JSON object — no prose.`;
     gaps: Array.isArray(parsed.gaps) ? parsed.gaps : [],
     suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
     candidatePairs,
+    slackCandidates,
     elapsedMs: Date.now() - t0,
   };
+}
+
+// ════════════════════════════════════════════════════════════════
+// PROJECT UPDATE — Claude writes a structured status update
+// (gated behind a fresh pm-ai-scan; uses its findings as context)
+// ════════════════════════════════════════════════════════════════
+async function projectUpdate({ audience, healthScan, lastScanFindings, project }) {
+  const t0 = Date.now();
+  const snapshot = buildProjectSnapshot(project);
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayMs = today.getTime();
+  const weekAgoMs = todayMs - 7 * 86400000;
+  const weekAheadMs = todayMs + 7 * 86400000;
+
+  const completed = (project.tasks || [])
+    .filter(t => t.status === 'Done' && t.completedAt && new Date(t.completedAt).getTime() >= weekAgoMs)
+    .map(t => ({ task: t.task, owner: t.owner, completedAt: t.completedAt }));
+  const upcoming  = (project.tasks || [])
+    .filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() <= weekAheadMs && new Date(t.dueDate+'T00:00:00').getTime() >= todayMs)
+    .map(t => ({ task: t.task, owner: t.owner, dueDate: t.dueDate, status: t.status }));
+  const pastDue   = (project.tasks || [])
+    .filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() < todayMs)
+    .map(t => ({ task: t.task, owner: t.owner, dueDate: t.dueDate, status: t.status }));
+  const blockers  = (project.tasks || []).filter(t => t.status === 'Blocked' || t.flaggedRisk).map(t => ({ task: t.task, owner: t.owner, notes: t.notes }));
+  const openRisks = (project.risks || []).filter(r => r.status === 'Open' || r.status === 'Monitoring' || !r.status)
+    .map(r => ({ risk: r.risk, owner: r.owner, impact: r.impact, mitigation: r.mitigation }));
+
+  const audienceTone = audience === 'leadership'
+    ? 'Executive — bottom-line first, business impact framing, max 250 words. No operational detail.'
+    : audience === 'stakeholders'
+    ? 'External stakeholders — high-level, no internal jargon, no team names unless necessary. Polite, confident.'
+    : 'Team — operational detail, name owners by team, include specifics. Crisp, action-oriented.';
+
+  const system = `You are a Principal Strategy Manager writing a project status update. Today: ${new Date().toISOString().split('T')[0]}.
+
+Audience: ${audienceTone}
+
+Output a clean plain-text update with these sections, in order:
+1) HEADER — Project name, current health score (from healthScan), one-line health summary.
+2) ✅ COMPLETED LAST WEEK — bullets from the completed list. If empty say "Nothing completed in the window."
+3) 📅 PIPELINE (NEXT 7 DAYS) — bullets from the upcoming list. Include owner and due date.
+4) ❗ PAST DUE — bullets from the pastDue list (if any).
+5) ⚠️ RISKS &  BLOCKERS — bullets from openRisks + blockers, prioritized by impact.
+6) 💡 AI HEALTH CHECK INSIGHTS — 2-3 of the most important gaps/suggestions from the lastScanFindings.
+7) CALL TO ACTION — 1-2 lines on what the recipient should do next.
+
+Use plain text. Bullets are "•". No markdown headers (use ALL CAPS for section labels). Keep it scannable.`;
+
+  const user = `PROJECT: ${project.name || 'Unnamed'}
+LEAD: ${project.lead || 'TBD'}
+TARGET LAUNCH: ${project.dueDate || 'TBD'}
+
+LATEST HEALTH SCAN:
+${JSON.stringify(healthScan || {}, null, 2)}
+
+HEALTH SCAN FINDINGS (use to spot gaps/suggestions to call out):
+${JSON.stringify(lastScanFindings || {}, null, 2)}
+
+COMPLETED LAST 7 DAYS:
+${JSON.stringify(completed, null, 2)}
+
+UPCOMING NEXT 7 DAYS:
+${JSON.stringify(upcoming, null, 2)}
+
+PAST DUE:
+${JSON.stringify(pastDue, null, 2)}
+
+OPEN RISKS:
+${JSON.stringify(openRisks, null, 2)}
+
+BLOCKERS:
+${JSON.stringify(blockers, null, 2)}
+
+PROJECT SNAPSHOT (for context only — don't quote verbatim):
+${JSON.stringify(snapshot, null, 2)}
+
+Now write the update.`;
+
+  const update = await callClaude(system, user, 2000);
+  return { update, elapsedMs: Date.now() - t0 };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2134,6 +2240,9 @@ module.exports = async (req, res) => {
         break;
       case 'pm-ai-scan':
         result = await pmAiScan({ ...payload, project });
+        break;
+      case 'project-update':
+        result = await projectUpdate({ ...payload, project });
         break;
       case 'analyze-flow-step':
         result = await analyzeFlowStep({ ...payload, project });
