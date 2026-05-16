@@ -511,6 +511,710 @@ async function listCalendarEvents({ daysPast, daysFuture, search, expandRecurrin
 // Posts a rich project info card to the channel. Attempts to pin and set
 // channel topic if optional scopes are available — gracefully falls back.
 // ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// ASK THE DASHBOARD — natural-language Q&A grounded in project data
+// ════════════════════════════════════════════════════════════════
+async function askDashboard({ question, project }) {
+  if (!question || !question.trim()) throw new Error('Question is required.');
+  const t0 = Date.now();
+
+  // Compress project to a focused snapshot Claude can reason over (token-budget-friendly).
+  const snapshot = buildProjectSnapshot(project);
+
+  const system = `You are a sharp project analyst assistant for a SaaS company called Moxie (MedSpa platform).
+You answer questions about the user's project using ONLY the JSON snapshot they provide.
+- Be direct and concise — exec-ready, no fluff.
+- Use bullet points or short paragraphs as appropriate.
+- Quote specific task names, owner names, and dates when supporting an answer.
+- If the data doesn't contain the answer, say so plainly — don't speculate.
+- When asked to summarize or draft, keep it under 6 sentences unless the user asks for more.
+- Today's date is ${new Date().toISOString().split('T')[0]}.`;
+
+  const user = `PROJECT SNAPSHOT:
+\`\`\`json
+${JSON.stringify(snapshot, null, 2)}
+\`\`\`
+
+QUESTION:
+${question.trim()}`;
+
+  const msg = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 1500,
+    system,
+    messages: [{ role: 'user', content: user }],
+  });
+
+  const answer = (msg.content && msg.content[0] && msg.content[0].text) || '';
+  const tokensUsed = (msg.usage?.input_tokens || 0) + (msg.usage?.output_tokens || 0);
+  return {
+    answer,
+    tokensUsed,
+    elapsedMs: Date.now() - t0,
+  };
+}
+
+// ════════════════════════════════════════════════════════════════
+// AUTO-RAG — recommend Green/Amber/Red with reasoning
+// ════════════════════════════════════════════════════════════════
+async function suggestRag({ project }) {
+  const t0 = Date.now();
+
+  // Compute deterministic signals first — these give Claude something to ground on
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayMs = today.getTime();
+  const dueMs = project.dueDate ? new Date(project.dueDate + 'T00:00:00').getTime() : null;
+  const daysToDue = dueMs ? Math.round((dueMs - todayMs) / 86400000) : null;
+
+  const tasks = project.tasks || [];
+  const ais = project.actionItems || [];
+  const risks = project.risks || [];
+  const checklist = project.launchChecklist || [];
+
+  const pastDueTasks = tasks.filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() < todayMs);
+  const pastDueAIs   = ais.filter(a => a.dueDate && a.status !== 'Done' && new Date(a.dueDate+'T00:00:00').getTime() < todayMs);
+  const blockedTasks = tasks.filter(t => t.status === 'Blocked');
+  const atRiskTasks  = tasks.filter(t => t.status === 'At Risk' || t.flaggedRisk);
+  const criticalAIs  = ais.filter(a => a.status !== 'Done' && a.priority === 'Critical');
+  const openRisks    = risks.filter(r => r.status === 'Open' || r.status === 'Monitoring' || !r.status);
+  const highRisks    = openRisks.filter(r => (r.impact || '').toLowerCase() === 'high');
+  const taskDone     = tasks.filter(t => t.status === 'Done').length;
+  const checklistDone = checklist.filter(i => i.checked).length;
+  const checklistTotal = checklist.filter(i => !i.na).length;
+  const requiredOpen = checklist.filter(i => i.required && !i.checked && !i.na).length;
+
+  const signals = {
+    daysToDue,
+    totalTasks: tasks.length,
+    tasksDone: taskDone,
+    pastDueTasks: pastDueTasks.length,
+    pastDueAIs: pastDueAIs.length,
+    blockedTasks: blockedTasks.length,
+    atRiskTasks: atRiskTasks.length,
+    criticalAIs: criticalAIs.length,
+    openRisks: openRisks.length,
+    highImpactRisks: highRisks.length,
+    launchChecklistProgress: `${checklistDone}/${checklistTotal}`,
+    requiredChecklistItemsOpen: requiredOpen,
+  };
+
+  const system = `You are a project health analyst. Based on the signals provided, recommend a RAG (Red/Amber/Green) health rating with a clear, defensible one-line reason and 3-5 key factors.
+
+Use these rules:
+- GREEN: 0 past-due tasks, 0 critical AIs, ≤1 high-impact risk, on-track for due date, no blockers.
+- AMBER: Some past-due items (≤3), 1-2 critical AIs, 2-3 high-impact risks, OR launch checklist behind required gates, OR <30 days to launch with required items still open.
+- RED: Multiple past-due (>3), 3+ critical AIs, blockers preventing progress, OR past the due date with required items still open, OR 4+ high-impact risks.
+
+Respond with ONLY valid JSON in this exact shape:
+{
+  "status": "Green" | "Amber" | "Red",
+  "reason": "one-line summary (max 100 chars)",
+  "factors": ["factor 1", "factor 2", "factor 3"]
+}`;
+
+  const user = `PROJECT: ${project.name || 'Unnamed'}
+DUE DATE: ${project.dueDate || 'TBD'} (${daysToDue !== null ? daysToDue + ' days from today' : 'no due date set'})
+
+SIGNALS:
+${JSON.stringify(signals, null, 2)}
+
+Recommend a RAG status with reason and factors.`;
+
+  const msg = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 600,
+    system,
+    messages: [{ role: 'user', content: user }],
+  });
+
+  const raw = (msg.content && msg.content[0] && msg.content[0].text) || '{}';
+  // Strip ```json fences if Claude wrapped them
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (e) {
+    // Fallback: try to extract first JSON object
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    parsed = m ? JSON.parse(m[0]) : { status: 'Amber', reason: 'Unable to parse AI response.', factors: [] };
+  }
+  return {
+    status: parsed.status || 'Amber',
+    reason: parsed.reason || '',
+    factors: parsed.factors || [],
+    signals,
+    elapsedMs: Date.now() - t0,
+  };
+}
+
+// ════════════════════════════════════════════════════════════════
+// Shared Claude helper for the Tier 2 / Tier 3 features below
+// ════════════════════════════════════════════════════════════════
+async function callClaude(system, user, maxTokens = 2000) {
+  const msg = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: 'user', content: user }],
+  });
+  return (msg.content && msg.content[0] && msg.content[0].text) || '';
+}
+// Strip ```json fences if present, then JSON.parse defensively
+function parseJsonSafe(raw, fallback) {
+  const cleaned = String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  try { return JSON.parse(cleaned); }
+  catch {
+    const m = cleaned.match(/[\[{][\s\S]*[\]}]/);
+    if (m) { try { return JSON.parse(m[0]); } catch {} }
+    return fallback;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// MEETING PREP BRIEF (Tier 2)
+// ════════════════════════════════════════════════════════════════
+async function meetingPrepBrief({ meetingId, project }) {
+  const t0 = Date.now();
+  const meeting = (project.meetings || []).find(m => String(m.id) === String(meetingId));
+  if (!meeting) throw new Error('Meeting not found in project state.');
+  const snapshot = buildProjectSnapshot(project);
+
+  const system = `You are an executive assistant preparing a 1-page meeting prep brief.
+Today's date: ${new Date().toISOString().split('T')[0]}.
+Output a clean, scannable plain-text brief (no markdown headers, just labels and bullets).
+Keep it tight — designed to skim in 60 seconds.
+
+Required sections:
+1) MEETING — title, date, attendees
+2) PURPOSE & SUGGESTED AGENDA (3-5 items, infer from project state if not stated)
+3) WHAT'S CHANGED SINCE LAST UPDATE (3 bullets max — completed tasks, key decisions, status shifts)
+4) ITEMS REQUIRING ATTENDEE INPUT (open AIs/blockers tied to attendees by team)
+5) TOP RISKS TO FLAG (max 3)
+6) DECISIONS NEEDED IN THIS MEETING (concrete, with proposed options)`;
+
+  const user = `MEETING:
+${JSON.stringify(meeting, null, 2)}
+
+PROJECT SNAPSHOT:
+\`\`\`json
+${JSON.stringify(snapshot, null, 2)}
+\`\`\``;
+
+  const brief = await callClaude(system, user, 1800);
+  return { brief, elapsedMs: Date.now() - t0 };
+}
+
+// ════════════════════════════════════════════════════════════════
+// AUTO-CATEGORIZE TASKS (Tier 2)
+// ════════════════════════════════════════════════════════════════
+async function suggestTaskTeams({ taskIds, project }) {
+  const t0 = Date.now();
+  const teamLabels = ['PSM','Sales','Ops Leader','Onboarding','MD','Supplies','Billing','Marketing','Internal Comms','Product','Rev Ops','Biz Ops','External','Senior Leadership Owner'];
+  const tasks = (project.tasks || []).filter(t => (taskIds || []).map(String).includes(String(t.id)));
+  if (!tasks.length) return { suggestions: [], elapsedMs: Date.now() - t0 };
+
+  const stakeholders = Object.entries(project.stakeholders || {})
+    .filter(([_, s]) => s && s.included)
+    .map(([k, s]) => ({ team: k, contact: s.contactName || '' }));
+
+  const system = `You assign tasks to the right team. Available teams (use these labels EXACTLY):
+${teamLabels.map(t => '- ' + t).join('\n')}
+
+For each task, infer the best team based on the task description and notes. Use the stakeholder roster as a tiebreaker.
+
+Respond with ONLY a JSON array, no prose:
+[
+  { "taskId": <number>, "suggestedTeam": "<one of the teams above>", "confidence": "High"|"Med"|"Low", "reason": "<one short sentence>" },
+  ...
+]`;
+
+  const user = `STAKEHOLDER ROSTER:
+${JSON.stringify(stakeholders, null, 2)}
+
+TASKS TO CATEGORIZE:
+${JSON.stringify(tasks.map(t => ({ id: t.id, task: t.task, notes: t.notes, currentOwner: t.owner })), null, 2)}
+
+Return your team suggestions as JSON array now.`;
+
+  const raw = await callClaude(system, user, 2000);
+  const suggestions = parseJsonSafe(raw, []);
+  return {
+    suggestions: Array.isArray(suggestions) ? suggestions : [],
+    elapsedMs: Date.now() - t0,
+  };
+}
+
+// ════════════════════════════════════════════════════════════════
+// SOP DRAFT (Tier 2)
+// ════════════════════════════════════════════════════════════════
+async function draftSop({ focus, project }) {
+  const t0 = Date.now();
+  const snapshot = buildProjectSnapshot(project);
+
+  const system = `You write Standard Operating Procedures (SOPs) for SaaS operations teams.
+Output a clean, well-structured SOP in plain text (NOT markdown). Use ALL-CAPS section headers and numbered steps.
+
+Required sections (adapt to what the project state contains):
+1) PURPOSE (2-3 sentences)
+2) WHEN TO USE THIS SOP (triggers)
+3) OWNER & ESCALATION PATH
+4) STEP-BY-STEP PROCEDURE (numbered, concrete, action-verb-led)
+5) INPUTS / TOOLS REQUIRED
+6) OUTPUTS / DELIVERABLES
+7) SUCCESS CRITERIA
+8) FAQ / EDGE CASES (3-5 anticipated questions)
+9) REVISION TRIGGERS
+
+Keep it operational — actionable for someone who has never run this process before.`;
+
+  const focusLine = focus ? `\nSOP FOCUS REQUESTED BY USER: ${focus}\nWrite the SOP narrowly for this focus area, not the whole project.\n` : '';
+
+  const user = `${focusLine}
+PROJECT SNAPSHOT (use as source material):
+\`\`\`json
+${JSON.stringify(snapshot, null, 2)}
+\`\`\`
+
+Now draft the SOP.`;
+
+  const sop = await callClaude(system, user, 2500);
+  return { sop, elapsedMs: Date.now() - t0 };
+}
+
+// ════════════════════════════════════════════════════════════════
+// DAILY STANDUP DRAFT (Tier 3)
+// ════════════════════════════════════════════════════════════════
+async function draftStandup({ project }) {
+  const t0 = Date.now();
+  const snapshot = buildProjectSnapshot(project);
+
+  const system = `You write daily standup updates. Today's date: ${new Date().toISOString().split('T')[0]}.
+
+Output a standup grouped by OWNER (team or person). For each owner show:
+*Owner Name*
+:white_check_mark: Yesterday: <2-3 bullets of recent completions or in-progress momentum>
+:dart: Today: <2-3 bullets of upcoming work — due today or this week>
+:no_entry: Blockers: <bullets of blocked tasks / open critical AIs — or "None">
+
+Use Slack mrkdwn formatting (*bold*, :emoji:, • bullets). Keep it scannable — total length under 600 words. Only include owners with relevant items.`;
+
+  const user = `PROJECT SNAPSHOT:
+\`\`\`json
+${JSON.stringify(snapshot, null, 2)}
+\`\`\`
+
+Write today's standup.`;
+
+  const standup = await callClaude(system, user, 1500);
+  return { standup, elapsedMs: Date.now() - t0 };
+}
+
+// ════════════════════════════════════════════════════════════════
+// DECISION EXTRACTION FROM THREAD (Tier 3)
+// ════════════════════════════════════════════════════════════════
+async function extractDecisions({ threadText, project }) {
+  const t0 = Date.now();
+  if (!threadText || !threadText.trim()) throw new Error('Thread text is required.');
+
+  const system = `You extract DECISIONS from conversations (Slack threads, meeting transcripts, emails).
+
+A decision is a concrete commitment or choice — NOT a question, NOT an opinion, NOT a task assignment.
+
+Examples of decisions:
+- "We're going with vendor X over vendor Y"
+- "Launch is moving to June 15"
+- "Pricing will be tier-based, $50/$100/$200"
+
+NOT decisions (skip these):
+- "We should think about pricing" (question/opinion)
+- "Jenn will draft the doc" (task — goes elsewhere)
+- "I'm worried about timeline" (concern)
+
+Respond with ONLY a JSON array, no prose:
+[
+  { "decision": "<one-sentence decision statement>", "decidedBy": "<person or team>", "date": "YYYY-MM-DD (best guess from context)", "context": "<one-sentence context, optional>" },
+  ...
+]
+If no decisions found, return [].`;
+
+  const user = `CONVERSATION TO ANALYZE:
+"""
+${threadText}
+"""
+
+Extract decisions as JSON array now.`;
+
+  const raw = await callClaude(system, user, 1500);
+  const decisions = parseJsonSafe(raw, []);
+  return {
+    decisions: Array.isArray(decisions) ? decisions : [],
+    elapsedMs: Date.now() - t0,
+  };
+}
+
+// ════════════════════════════════════════════════════════════════
+// ONBOARDING BRIEF (Tier 3)
+// ════════════════════════════════════════════════════════════════
+async function onboardingBrief({ role, project }) {
+  const t0 = Date.now();
+  const snapshot = buildProjectSnapshot(project);
+
+  const system = `You write CATCH-UP BRIEFS for project team members joining mid-stream. Today: ${new Date().toISOString().split('T')[0]}.
+
+The reader has zero context. Goal: get them productive in 15 minutes of reading.
+
+Required sections (plain text, ALL-CAPS headers):
+1) PROJECT IN ONE PARAGRAPH (what, why, target launch)
+2) CURRENT HEALTH (RAG status + one-line reason)
+3) WHO'S WHO (stakeholder teams + key contacts, 5-8 names max)
+4) WHAT'S BEEN DECIDED (3-5 most important decisions, with brief context)
+5) WHERE THE WORK STANDS (Phase / milestone breakdown — what's done, what's in flight, what's next)
+6) OPEN RISKS & BLOCKERS (top 3-5, with owners)
+7) WHAT THIS PERSON CAN PICK UP THIS WEEK (concrete suggestions based on their role)
+8) RESOURCES (key links, channels, docs)`;
+
+  const roleLine = role ? `READER'S ROLE: ${role}\nTailor "WHAT THIS PERSON CAN PICK UP" specifically for this role.\n` : '';
+
+  const user = `${roleLine}
+PROJECT SNAPSHOT:
+\`\`\`json
+${JSON.stringify(snapshot, null, 2)}
+\`\`\`
+
+Write the catch-up brief.`;
+
+  const brief = await callClaude(system, user, 2500);
+  return { brief, elapsedMs: Date.now() - t0 };
+}
+
+// ════════════════════════════════════════════════════════════════
+// EMAIL RESPONSE DRAFTER (Tier 3)
+// ════════════════════════════════════════════════════════════════
+async function draftEmailReply({ incoming, project }) {
+  const t0 = Date.now();
+  if (!incoming || !incoming.trim()) throw new Error('Incoming email is required.');
+  const snapshot = buildProjectSnapshot(project);
+
+  const system = `You draft email replies on behalf of the project lead. Today: ${new Date().toISOString().split('T')[0]}.
+
+Rules:
+- Lead with the answer / bottom line — exec-ready, no fluff.
+- Use specifics from the project state (real task names, dates, owners) when they answer the question.
+- Match the tone of the incoming email (formal vs casual).
+- Keep it tight — 3-6 sentences for most replies. Use bullets only if listing more than 3 items.
+- If the question can't be answered from the data, say so honestly and propose a next step.
+- End with a clear next-step or sign-off. Don't say "Best," — leave that to the sender.
+
+Output ONLY the reply body. No subject line. No "Hi <name>," — start with the substance.`;
+
+  const user = `INCOMING EMAIL:
+"""
+${incoming}
+"""
+
+PROJECT SNAPSHOT (use for facts):
+\`\`\`json
+${JSON.stringify(snapshot, null, 2)}
+\`\`\`
+
+Draft the reply.`;
+
+  const reply = await callClaude(system, user, 1500);
+  return { reply, elapsedMs: Date.now() - t0 };
+}
+
+// ════════════════════════════════════════════════════════════════
+// PROPOSAL BUILDER — generates a proposal in Moxie's standard format
+// (Modeled after the Bookkeeping Process Remediation Proposal template)
+// ════════════════════════════════════════════════════════════════
+async function buildProposal({ context, project }) {
+  const t0 = Date.now();
+  const snapshot = buildProjectSnapshot(project);
+
+  const system = `You write project proposals for Moxie (MedSpa SaaS platform) in their established template format. Output a complete, paste-ready proposal in plain text. Today: ${new Date().toISOString().split('T')[0]}.
+
+═══════ MOXIE PROPOSAL TEMPLATE — FOLLOW EXACTLY ═══════
+
+Use these Roman-numeral sections IN THIS ORDER:
+
+[Cover block]
+MOXIE
+PROJECT PROPOSAL — <PROJECT NAME>
+Date: <today>  |  Prepared by: <project lead>
+
+I. EXECUTIVE SUMMARY
+   2-4 short paragraphs. Open with one-sentence thesis of the problem, then the proposed approach. Name the workstreams (2-3 max). List the team. ~120 words.
+
+II. CURRENT STATE
+   Categorized inventory of what is broken today, in ALL-CAPS labeled buckets like:
+   DATA — what's broken about data today.
+   PROCESS — what's broken about process today.
+   BILLING — etc.
+   COMPLIANCE — etc.
+   Use 4-6 buckets that fit the project. Each 1-2 sentences. Plainspoken, no spin.
+
+III. PROBLEM STATEMENT
+   One-sentence root cause. Then 5-7 bullets listing downstream consequences. Direct, no hedging.
+
+IV. GOALS / OBJECTIVES
+   5-8 bulleted outcome statements, each starting with an action verb (Reduce, Eliminate, Establish, Replace, Document, etc.). Measurable where possible.
+
+V. PROPOSED NEW PROCESS
+   Three-column comparison rendered in plain text:
+   AREA | CURRENT (Broken) | PROPOSED
+   <repeated rows>
+   Then a "NEW COMMUNICATION FRAMEWORK" subsection — 2-3 paragraphs on the new operating model.
+
+VI. SCOPE OF WORK
+   Two workstreams with priority tables:
+
+   WORKSTREAM 1 — IMMEDIATE FIXES
+   PRIORITY | ACTION | OWNER | DUE DATE
+   <5-7 rows: CRITICAL / HIGH / MEDIUM>
+
+   WORKSTREAM 2 — PROCESS REBUILD
+   PRIORITY | ACTION | OWNER | DUE DATE
+   <5-7 rows>
+
+VII. TIMETABLE
+   Phase table:
+   PHASE | FOCUS | TARGET DATES
+   <4-5 rows>
+
+VIII. KEY PERSONNEL
+   ROLE | NAME | RESPONSIBILITIES
+   <one row per stakeholder team that's actively engaged>
+
+IX. EVALUATION
+   5-7 bulleted measurable success criteria with dates and percentages where possible.
+
+X. RISKS
+   RISK | SEVERITY (High/Med/Low) | MITIGATION
+   <5-7 rows>
+
+XI. NEXT STEPS
+   Numbered immediate action list with owners and dates. 7-10 items.
+
+XII. APPENDIX
+   Bulleted list of supporting artifacts (links to relevant docs, dashboards, contracts).
+
+[Signature block]
+Project Lead: ___________________  Date: __________
+Sponsor:       ___________________  Date: __________
+Stakeholder:   ___________________  Date: __________
+
+═══════ STYLE RULES ═══════
+- Use Roman numerals (I, II, III...) for section headers.
+- Use ALL-CAPS for category labels and table headers.
+- Plain text only — NO markdown, NO bold syntax, NO asterisks.
+- Em-dashes for clarifying lists.
+- Every action item has a named owner (a team from the stakeholder list) and a concrete date.
+- Tables: pipe-delimited (use ASCII | character), monospace-friendly.
+- Moxie/MedSpa vocabulary: "providers" (not customers), "PSM" (Provider Success Manager), use real team names from stakeholder list.
+- Formal, executive-facing, plainspoken. Acknowledge problems without spin.
+- Section length: most sections ~100-250 words.
+- Operational specificity (names, dates, percentages) under executive framing.
+
+═══════ REPRESENTATIVE VOICE EXAMPLES ═══════
+"The bookkeeping product launched and is live, but the operational layer beneath it was never fully built. What exists today is a fragile, manual process held together by Slack messages, individual tribal knowledge, and workarounds."
+"The PSM team is absorbing manual work that should be automated — contract routing, kickoff scheduling, feature flag activation — at the expense of provider relationship quality."
+"Replace Slack-only coordination with a formal operating model — defined escalation paths, documented decisions, and SLAs for issue resolution."
+
+Now: read the project snapshot and additional context, then output the FULL proposal in the template above. Be concrete — pull real task names, real owners, real dates from the snapshot.`;
+
+  const user = `${context ? 'ADDITIONAL CONTEXT FROM USER:\n' + context + '\n\n' : ''}PROJECT SNAPSHOT (source of truth):
+\`\`\`json
+${JSON.stringify(snapshot, null, 2)}
+\`\`\`
+
+Now write the complete proposal. Plain text only, no markdown.`;
+
+  const proposal = await callClaude(system, user, 4000);
+  return { proposal, elapsedMs: Date.now() - t0 };
+}
+
+// ════════════════════════════════════════════════════════════════
+// READ SLACK CHANNEL — pull last N days of messages, extract candidate tasks/decisions/risks
+// ════════════════════════════════════════════════════════════════
+// Needed Slack scopes: channels:history (public), groups:history (private), channels:read
+async function readSlackChannel({ channel, days, project }) {
+  const t0 = Date.now();
+  const botToken = process.env.SLACK_BOT_TOKEN;
+  if (!botToken) throw new Error('Slack bot token not configured.');
+  if (!channel) throw new Error('Channel is required.');
+  const lookbackDays = Math.max(1, Math.min(30, parseInt(days, 10) || 7));
+
+  // Resolve channel ID — accept #name, name, or raw ID
+  const cleanName = String(channel).replace(/^#/, '').trim();
+  let channelId = cleanName;
+  if (!/^C[A-Z0-9]+$/i.test(cleanName)) {
+    const listRes = await fetch('https://slack.com/api/conversations.list?types=public_channel,private_channel&limit=1000', {
+      headers: { 'Authorization': `Bearer ${botToken}` },
+    });
+    const listJson = await listRes.json().catch(() => ({}));
+    if (!listJson.ok) throw new Error('Slack conversations.list failed: ' + (listJson.error || 'unknown'));
+    const found = (listJson.channels || []).find(c => c.name === cleanName);
+    if (!found) throw new Error(`Channel #${cleanName} not found or bot isn't in it. Invite the bot first.`);
+    channelId = found.id;
+  }
+
+  // Pull messages (Slack returns most recent first)
+  const oldest = Math.floor((Date.now() - lookbackDays * 86400000) / 1000);
+  const histRes = await fetch(`https://slack.com/api/conversations.history?channel=${channelId}&oldest=${oldest}&limit=500`, {
+    headers: { 'Authorization': `Bearer ${botToken}` },
+  });
+  const histJson = await histRes.json().catch(() => ({}));
+  if (!histJson.ok) throw new Error('Slack history failed: ' + (histJson.error || 'unknown') + ' — ensure bot has channels:history scope and is in the channel.');
+
+  const messages = (histJson.messages || [])
+    .filter(m => m.type === 'message' && !m.subtype && m.text)
+    .map(m => ({ user: m.user || m.username || '', ts: m.ts, text: m.text }));
+
+  if (!messages.length) {
+    return { candidates: { tasks: [], decisions: [], risks: [] }, messageCount: 0, elapsedMs: Date.now() - t0 };
+  }
+
+  // Map user IDs to names (best-effort; cache could be added later)
+  const userIds = [...new Set(messages.map(m => m.user).filter(u => u && /^U/.test(u)))];
+  const userNames = {};
+  for (const uid of userIds.slice(0, 50)) {
+    try {
+      const uRes = await fetch(`https://slack.com/api/users.info?user=${uid}`, { headers: { 'Authorization': `Bearer ${botToken}` } });
+      const uJson = await uRes.json().catch(() => ({}));
+      if (uJson.ok && uJson.user) userNames[uid] = uJson.user.real_name || uJson.user.name || uid;
+    } catch (e) { /* skip */ }
+  }
+  const labeled = messages.map(m => ({
+    speaker: userNames[m.user] || m.user || 'unknown',
+    when: new Date(parseFloat(m.ts) * 1000).toISOString().split('T')[0],
+    text: m.text,
+  }));
+
+  // Snapshot for grounding — Claude only proposes items NOT already in the project
+  const snapshot = buildProjectSnapshot(project);
+  const existingTasks = (snapshot.tasks || []).map(t => t.task).filter(Boolean);
+  const existingDecisions = (snapshot.decisions || []).map(d => d.decision).filter(Boolean);
+
+  const system = `You scan Slack conversations and propose project-tracker additions. Today: ${new Date().toISOString().split('T')[0]}.
+
+For each candidate item, classify it as one of: TASK (work to do, with an owner if mentioned), DECISION (a concrete choice/commitment), or RISK (something that could go wrong / blocker / concern).
+
+CRITICAL RULES:
+- Do NOT propose items that duplicate things ALREADY in the project (lists below).
+- Do NOT propose chit-chat, questions, or generic discussion as tasks.
+- Owner names: map to a Slack speaker name when possible.
+- Dates: extract from natural language ("by Friday", "next week" → calendar date).
+- If nothing concrete is found, return empty arrays.
+
+Respond with ONLY valid JSON in this exact shape:
+{
+  "tasks": [ { "text": "<concrete task>", "owner": "<name or team>", "dueDate": "YYYY-MM-DD or empty", "context": "<one-line context>" } ],
+  "decisions": [ { "text": "<decision>", "decidedBy": "<name>", "date": "YYYY-MM-DD", "context": "<one-line>" } ],
+  "risks": [ { "text": "<risk>", "owner": "<name>", "impact": "High|Med|Low", "mitigation": "<plan or empty>" } ]
+}`;
+
+  const user = `PROJECT: ${project.name || 'Unnamed'}
+
+ALREADY IN PROJECT — DO NOT PROPOSE DUPLICATES:
+Tasks: ${JSON.stringify(existingTasks.slice(0, 50))}
+Decisions: ${JSON.stringify(existingDecisions.slice(0, 30))}
+
+SLACK MESSAGES (last ${lookbackDays} days, oldest first):
+${JSON.stringify(labeled.slice(0, 200), null, 2)}
+
+Now propose new candidate tasks, decisions, and risks. Return JSON only.`;
+
+  const raw = await callClaude(system, user, 2500);
+  const parsed = parseJsonSafe(raw, { tasks: [], decisions: [], risks: [] });
+  return {
+    candidates: {
+      tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
+      decisions: Array.isArray(parsed.decisions) ? parsed.decisions : [],
+      risks: Array.isArray(parsed.risks) ? parsed.risks : [],
+    },
+    messageCount: messages.length,
+    channelId,
+    elapsedMs: Date.now() - t0,
+  };
+}
+
+// Build a compact, Claude-friendly snapshot of the project (drops verbose fields, trims notes).
+function buildProjectSnapshot(project) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayMs = today.getTime();
+  const trim = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; };
+
+  const stakeholders = Object.entries(project.stakeholders || {})
+    .filter(([_, s]) => s && s.included)
+    .map(([key, s]) => ({ team: key, name: s.contactName || '', email: s.contactEmail || '' }));
+
+  const milestones = (project.milestones || []).map(m => ({
+    id: m.id, name: m.name, date: m.targetDate || m.date || '', status: m.status || ''
+  }));
+
+  const tasks = (project.tasks || []).map(t => {
+    const isPastDue = t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() < todayMs;
+    return {
+      task: trim(t.task, 200),
+      owner: t.owner || '',
+      status: t.status || '',
+      dueDate: t.dueDate || '',
+      pastDue: isPastDue,
+      flagged: !!t.flaggedRisk,
+      milestoneId: t.milestoneId || null,
+      notes: trim(t.notes, 150),
+    };
+  });
+
+  const actionItems = (project.actionItems || []).map(a => ({
+    item: trim(a.item, 200),
+    owner: a.owner || '',
+    status: a.status || '',
+    priority: a.priority || '',
+    dueDate: a.dueDate || '',
+    milestoneId: a.milestoneId || null,
+  }));
+
+  const risks = (project.risks || []).map(r => ({
+    risk: trim(r.risk, 200),
+    owner: r.owner || '',
+    impact: r.impact || '',
+    likelihood: r.likelihood || '',
+    status: r.status || '',
+    mitigation: trim(r.mitigation, 150),
+  }));
+
+  const decisions = (project.decisions || []).slice(-20).map(d => ({
+    decision: trim(d.decision, 200),
+    date: d.date || '',
+    decidedBy: d.decidedBy || '',
+  }));
+
+  const launchChecklist = (project.launchChecklist || []).map(c => ({
+    name: c.name, required: !!c.required, checked: !!c.checked, na: !!c.na,
+  }));
+
+  const recentMeetings = (project.meetings || []).slice(-5).map(m => ({
+    title: m.title || '', date: m.date || '', notes: trim(m.notes, 200),
+  }));
+
+  return {
+    name: project.name || '',
+    lead: project.lead || '',
+    dueDate: project.dueDate || '',
+    description: trim(project.description, 300),
+    ragStatus: project.ragStatus || {},
+    stakeholders,
+    milestones,
+    tasks,
+    actionItems,
+    risks,
+    decisions,
+    launchChecklist,
+    recentMeetings,
+  };
+}
+
 async function pinProjectToSlack({ project, settings, fbProjectId }) {
   const botToken = process.env.SLACK_BOT_TOKEN;
   if (!botToken) throw new Error('Slack bot token not configured.');
@@ -1259,6 +1963,39 @@ module.exports = async (req, res) => {
         break;
       case 'create-slack-channel':
         result = await createSlackChannel({ ...payload, project, settings });
+        break;
+      case 'ask-dashboard':
+        result = await askDashboard({ ...payload, project });
+        break;
+      case 'suggest-rag':
+        result = await suggestRag({ ...payload, project });
+        break;
+      case 'meeting-prep-brief':
+        result = await meetingPrepBrief({ ...payload, project });
+        break;
+      case 'suggest-task-teams':
+        result = await suggestTaskTeams({ ...payload, project });
+        break;
+      case 'draft-sop':
+        result = await draftSop({ ...payload, project });
+        break;
+      case 'draft-standup':
+        result = await draftStandup({ ...payload, project });
+        break;
+      case 'extract-decisions':
+        result = await extractDecisions({ ...payload, project });
+        break;
+      case 'onboarding-brief':
+        result = await onboardingBrief({ ...payload, project });
+        break;
+      case 'draft-email-reply':
+        result = await draftEmailReply({ ...payload, project });
+        break;
+      case 'build-proposal':
+        result = await buildProposal({ ...payload, project });
+        break;
+      case 'read-slack-channel':
+        result = await readSlackChannel({ ...payload, project });
         break;
       default:
         return res.status(400).json({ error: 'Unknown action: ' + action });
