@@ -930,7 +930,7 @@
 <!-- ===================== PLAN (Milestones + Tasks + Action Items) ===================== -->
 <div id="tab-milestones" class="tab-content">
   <!-- Plan toolbar -->
-  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
     <button class="btn btn-secondary btn-sm" onclick="openManagePeopleChooser()" title="Add/manage stakeholders or email recipients">👥 Manage People</button>
     <button class="btn btn-secondary btn-sm" onclick="openTaskTemplatesModal()" title="Load a pre-built task template pack">📋 Load Templates</button>
     <button class="btn btn-secondary btn-sm" onclick="openDocImportModal()" title="Paste a proposal to auto-extract tasks">📄 Import from Doc</button>
@@ -938,6 +938,11 @@
     <button class="btn btn-secondary btn-sm" onclick="expandAllMilestones()" title="Show tasks &amp; action items under every milestone">▼ Expand All</button>
     <div style="flex:1;"></div>
     <button class="btn btn-teal" onclick="openCompleteProjectModal()" title="Open the project sign-off, launch checklist, and handoff/SOPs">✅ Complete Project →</button>
+  </div>
+
+  <!-- Click-to-expand hint -->
+  <div style="background:#F3E8FF;border:1px solid var(--purple);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--purple);font-weight:600;">
+    💡 Milestones start collapsed for quick scanning — <strong>click any milestone header</strong> to expand and see its tasks &amp; action items. Use the toolbar above to expand or collapse all at once.
   </div>
 
   <!-- Plan filter bar -->
@@ -5646,7 +5651,20 @@ function recomputeMilestoneDates() {
 
 // ── Milestone collapse / expand state ──────────────────────────
 // Keyed by milestone id (number) or the string 'unassigned'.
+// On first init, default every milestone to collapsed so the Plan tab opens compact.
 window._milestoneCollapsed = window._milestoneCollapsed || {};
+window._milestoneCollapseInitialized = window._milestoneCollapseInitialized || false;
+
+// Apply the "all-collapsed by default" preset once — called by renderMilestones
+// the very first time it runs after a project is loaded.
+function initMilestoneCollapseOnce() {
+  if (window._milestoneCollapseInitialized) return;
+  if (!project || !Array.isArray(project.milestones)) return;
+  if (project.milestones.length === 0) return;
+  project.milestones.forEach(m => { window._milestoneCollapsed[m.id] = true; });
+  window._milestoneCollapsed['unassigned'] = true;
+  window._milestoneCollapseInitialized = true;
+}
 
 function toggleMilestoneCollapse(id) {
   if (!window._milestoneCollapsed) window._milestoneCollapsed = {};
@@ -5706,6 +5724,8 @@ function renderMilestones() {
   if (typeof refreshOwnerDatalist === 'function') refreshOwnerDatalist();
   // Refresh the Owner filter dropdown (covers new tasks/AIs/stakeholders)
   refreshOwnerFilterOptions();
+  // First time we render — default every milestone to collapsed so the Plan tab opens compact
+  if (typeof initMilestoneCollapseOnce === 'function') initMilestoneCollapseOnce();
 
   const ms      = (project.milestones || []);
   const today   = new Date(); today.setHours(0,0,0,0);
@@ -7401,8 +7421,22 @@ function pmAiAddSuggestionToPlan(sidx) {
     project.milestones.push(ownerMs);
   }
 
-  // Determine owner string — use the project lead, fall back to "Senior Leadership Owner"
-  const ownerName = (project.lead || '').trim() || 'Senior Leadership Owner';
+  // Always assign to the "Senior Leadership Owner" team so it groups cleanly under
+  // that workstream card. The project lead's name is preserved in the notes.
+  const ownerName = 'Senior Leadership Owner';
+  // Auto-include the Senior Leadership Owner team so the workstream card appears
+  if (!project.stakeholders) project.stakeholders = {};
+  if (!project.stakeholders.SeniorLeadership) project.stakeholders.SeniorLeadership = { included: false, shared: false, contactName: '', contactEmail: '' };
+  if (!project.stakeholders.SeniorLeadership.included) {
+    project.stakeholders.SeniorLeadership.included = true;
+    // Pre-fill the lead's name + email if we have them
+    if (project.lead && !project.stakeholders.SeniorLeadership.contactName) {
+      project.stakeholders.SeniorLeadership.contactName = project.lead;
+    }
+    if (project.leadEmail && !project.stakeholders.SeniorLeadership.contactEmail) {
+      project.stakeholders.SeniorLeadership.contactEmail = project.leadEmail;
+    }
+  }
 
   // Add the task
   project.tasks = project.tasks || [];
@@ -9444,6 +9478,9 @@ function mergeProjectClean(loaded) {
   ];
   transientFields.forEach(k => { if (!(k in (loaded || {}))) delete project[k]; });
   Object.assign(project, loaded || {});
+  // Reset UI-only state so the new project gets the default "all collapsed" view
+  window._milestoneCollapsed = {};
+  window._milestoneCollapseInitialized = false;
 }
 
 function showToast(msg, type = 'success') {
