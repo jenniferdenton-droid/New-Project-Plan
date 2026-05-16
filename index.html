@@ -2344,6 +2344,73 @@
   </div>
 </div>
 
+<!-- ═══ QUICK EDIT (from Workstreams) ═══ -->
+<div class="modal-overlay" id="quickEditModal">
+  <div class="modal" style="max-width:580px;">
+    <div class="modal-header">
+      <div class="modal-title" id="qe_title">📝 Quick Edit</div>
+      <button class="close-btn" onclick="closeModal('quickEditModal')">✕</button>
+    </div>
+    <div style="padding:16px 22px 22px;">
+      <div id="qe_subtitle" style="font-size:11px;color:var(--text-secondary);margin-bottom:14px;"></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Owner (Team)</label>
+          <select id="qe_owner" style="font-size:13px;width:100%;"></select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Due Date</label>
+          <input type="date" id="qe_due" style="font-size:13px;width:100%;">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Status</label>
+          <select id="qe_status" style="font-size:13px;width:100%;"></select>
+        </div>
+        <div id="qe_priority_wrap" style="display:none;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Priority (AI)</label>
+          <select id="qe_priority" style="font-size:13px;width:100%;">
+            <option value="Critical">Critical</option>
+            <option value="High">High</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="Low">Low</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom:10px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.5px;display:block;margin-bottom:4px;">Notes / Update</label>
+        <textarea id="qe_notes" rows="4" placeholder="Add context, blockers, or progress notes…" style="font-size:13px;width:100%;"></textarea>
+      </div>
+
+      <!-- Flag as Risk (tasks only) -->
+      <div id="qe_risk_wrap" style="background:#FFF3E0;border:1px solid #F59E0B;border-radius:6px;padding:10px 12px;margin-bottom:14px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;color:#92400E;">
+          <input type="checkbox" id="qe_risk_flag" onchange="document.getElementById('qe_risk_detail_wrap').style.display = this.checked ? 'block' : 'none'">
+          🚩 Flag this as a Risk
+        </label>
+        <div id="qe_risk_detail_wrap" style="display:none;margin-top:8px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#92400E;letter-spacing:.5px;display:block;margin-bottom:4px;">Risk detail (what could go wrong / mitigation)</label>
+          <textarea id="qe_risk_detail" rows="2" placeholder="e.g. Vendor SLA slipping — escalate to procurement" style="font-size:12px;width:100%;"></textarea>
+        </div>
+      </div>
+
+      <div id="qe_change_log" style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;display:none;"></div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="openInPlanFromQuickEdit()">↗ Open Full Edit in Plan</button>
+        <div style="flex:1;"></div>
+        <button class="btn btn-secondary" onclick="closeModal('quickEditModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveQuickEdit()">💾 Save Changes</button>
+      </div>
+      <div id="qe_status_line" style="font-size:11px;color:var(--text-secondary);margin-top:8px;min-height:14px;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ MANAGE PEOPLE CHOOSER ═══ -->
 <div class="modal-overlay" id="managePeopleChooserModal">
   <div class="modal" style="max-width:520px;">
@@ -5182,13 +5249,26 @@ function promptMultiTeam(currentVal) {
 function setTaskOwner(taskId, value) {
   const t = (project.tasks || []).find(x => x.id === taskId);
   if (!t) return;
+  let newOwner;
   if (value === '__multi__') {
-    const newVal = promptMultiTeam(t.owner);
-    if (newVal === null) { renderMilestones(); return; } // user cancelled
-    t.owner = newVal;
+    newOwner = promptMultiTeam(t.owner);
+    if (newOwner === null) { renderMilestones(); return; }
   } else {
-    t.owner = value;
+    newOwner = value;
   }
+  // Reason prompt if changing from an existing owner
+  if (t.owner && t.owner !== newOwner && newOwner) {
+    const reason = prompt(
+      `Changing owner on:\n"${t.task || 'Untitled task'}"\n  from: ${t.owner}\n  to:   ${newOwner}\n\nWhy is this changing? (Optional — leave blank to skip)`,
+      ''
+    );
+    if (reason === null) { renderMilestones(); return; }
+    if (reason.trim()) {
+      const entry = `[${new Date().toISOString().slice(0,10)}] Owner changed ${t.owner} → ${newOwner}: ${reason.trim()}`;
+      t.notes = (t.notes ? t.notes + '\n' : '') + entry;
+    }
+  }
+  t.owner = newOwner;
   t.updatedAt = new Date().toISOString();
   refreshAfterOwnerChange();
   triggerAutoSave();
@@ -5197,13 +5277,25 @@ function setTaskOwner(taskId, value) {
 function setAiOwner(aiId, value) {
   const a = (project.actionItems || []).find(x => x.id === aiId);
   if (!a) return;
+  let newOwner;
   if (value === '__multi__') {
-    const newVal = promptMultiTeam(a.owner);
-    if (newVal === null) { renderMilestones(); return; }
-    a.owner = newVal;
+    newOwner = promptMultiTeam(a.owner);
+    if (newOwner === null) { renderMilestones(); return; }
   } else {
-    a.owner = value;
+    newOwner = value;
   }
+  if (a.owner && a.owner !== newOwner && newOwner) {
+    const reason = prompt(
+      `Changing owner on action item:\n"${a.item || 'Untitled'}"\n  from: ${a.owner}\n  to:   ${newOwner}\n\nWhy is this changing? (Optional — leave blank to skip)`,
+      ''
+    );
+    if (reason === null) { renderMilestones(); return; }
+    if (reason.trim()) {
+      const entry = `[${new Date().toISOString().slice(0,10)}] Owner changed ${a.owner} → ${newOwner}: ${reason.trim()}`;
+      a.notes = (a.notes ? a.notes + '\n' : '') + entry;
+    }
+  }
+  a.owner = newOwner;
   a.updatedAt = new Date().toISOString();
   refreshAfterOwnerChange();
   triggerAutoSave();
@@ -5227,7 +5319,6 @@ function setTaskMilestone(taskId, newMilestoneId) {
   if (!t) return;
   const oldMid = t.milestoneId;
   const newMid = (newMilestoneId === null || newMilestoneId === '') ? null : Number(newMilestoneId);
-  // If actually moving (not a redundant set), prompt for a reason and log it
   if (oldMid !== newMid) {
     const oldMs = (project.milestones || []).find(m => m.id === oldMid);
     const newMs = (project.milestones || []).find(m => m.id === newMid);
@@ -5235,7 +5326,6 @@ function setTaskMilestone(taskId, newMilestoneId) {
       `Moving "${t.task || 'Untitled task'}"\n  from: ${oldMs ? oldMs.name : 'Unassigned'}\n  to:   ${newMs ? newMs.name : 'Unassigned'}\n\nWhy is this being moved? (Optional — leave blank to skip)`,
       ''
     );
-    // User cancelled the prompt entirely — revert and bail
     if (reason === null) { renderMilestones(); return; }
     if (reason.trim()) {
       const entry = `[${new Date().toISOString().slice(0,10)}] Moved to ${newMs ? newMs.name : 'Unassigned'}: ${reason.trim()}`;
@@ -5243,6 +5333,7 @@ function setTaskMilestone(taskId, newMilestoneId) {
     }
   }
   t.milestoneId = newMid;
+  if (typeof recomputeMilestoneDates === 'function') recomputeMilestoneDates();
   renderMilestones();
   if (typeof renderTasks === 'function') renderTasks();
   triggerAutoSave();
@@ -5253,7 +5344,23 @@ function setTaskMilestone(taskId, newMilestoneId) {
 function setAiMilestone(aiId, newMilestoneId) {
   const a = (project.actionItems || []).find(x => x.id === aiId);
   if (!a) return;
-  a.milestoneId = (newMilestoneId === null || newMilestoneId === '') ? null : Number(newMilestoneId);
+  const oldMid = a.milestoneId;
+  const newMid = (newMilestoneId === null || newMilestoneId === '') ? null : Number(newMilestoneId);
+  if (oldMid !== newMid) {
+    const oldMs = (project.milestones || []).find(m => m.id === oldMid);
+    const newMs = (project.milestones || []).find(m => m.id === newMid);
+    const reason = prompt(
+      `Moving action item "${a.item || 'Untitled'}"\n  from: ${oldMs ? oldMs.name : 'Unassigned'}\n  to:   ${newMs ? newMs.name : 'Unassigned'}\n\nWhy is this being moved? (Optional — leave blank to skip)`,
+      ''
+    );
+    if (reason === null) { renderMilestones(); return; }
+    if (reason.trim()) {
+      const entry = `[${new Date().toISOString().slice(0,10)}] Moved to ${newMs ? newMs.name : 'Unassigned'}: ${reason.trim()}`;
+      a.notes = (a.notes ? a.notes + '\n' : '') + entry;
+    }
+  }
+  a.milestoneId = newMid;
+  if (typeof recomputeMilestoneDates === 'function') recomputeMilestoneDates();
   renderMilestones();
   if (typeof renderActionItems === 'function') renderActionItems();
   triggerAutoSave();
@@ -5267,6 +5374,177 @@ function renderPlanView() {
   // Keep the hidden flat tasks tab in sync (used by doc-import, template load, etc.)
   const tbody = document.getElementById('tasksBody');
   if (tbody) renderTasks();
+}
+
+// Workstream click → open Quick Edit modal (no tab jump — stay in Workstreams)
+function focusItemOnPlan(kind, itemId) {
+  openQuickEditModal(kind, itemId);
+}
+
+// Open in Plan tab from Quick Edit footer (when user wants the full row context)
+function openInPlanFromQuickEdit() {
+  const ctx = window._quickEditCtx;
+  if (!ctx) return;
+  closeModal('quickEditModal');
+  switchTab('milestones');
+  const item = ctx.kind === 'ai'
+    ? (project.actionItems || []).find(x => x.id === ctx.id)
+    : (project.tasks || []).find(x => x.id === ctx.id);
+  if (item) {
+    if (item.milestoneId != null && window._milestoneCollapsed) window._milestoneCollapsed[item.milestoneId] = false;
+    else if (window._milestoneCollapsed) window._milestoneCollapsed['unassigned'] = false;
+  }
+  setTimeout(() => {
+    if (typeof renderMilestones === 'function') renderMilestones();
+    setTimeout(() => {
+      const el = document.getElementById((ctx.kind === 'ai' ? 'planAi' : 'planTask') + ctx.id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const orig = el.style.background;
+        el.style.transition = 'background .25s';
+        el.style.background = '#FEF3C7';
+        setTimeout(() => { el.style.background = orig; }, 2500);
+      }
+    }, 220);
+  }, 180);
+}
+
+// ═══════════════════════════════════════════════════════
+// QUICK EDIT modal — opened from Workstreams card click
+// ═══════════════════════════════════════════════════════
+function openQuickEditModal(kind, itemId) {
+  const item = kind === 'ai'
+    ? (project.actionItems || []).find(x => x.id === itemId)
+    : (project.tasks || []).find(x => x.id === itemId);
+  if (!item) { showToast('Item not found.', 'error'); return; }
+  window._quickEditCtx = { kind, id: itemId, original: JSON.parse(JSON.stringify(item)) };
+
+  const isAi = kind === 'ai';
+  document.getElementById('qe_title').textContent = (isAi ? '📝 Quick Edit — Action Item' : '📝 Quick Edit — Task');
+  document.getElementById('qe_subtitle').innerHTML = '<strong style="font-size:13px;color:var(--text);">' + escHtml(item.task || item.item || '') + '</strong>';
+
+  // Owner dropdown — team labels from STAKEHOLDER_LIST
+  const ownerSel = document.getElementById('qe_owner');
+  const teamOpts = STAKEHOLDER_LIST.map(s => s.label);
+  const curOwner = item.owner || '';
+  ownerSel.innerHTML = '<option value="">— Pick a team —</option>' +
+    teamOpts.map(t => `<option value="${escHtml(t)}" ${curOwner===t?'selected':''}>${escHtml(t)}</option>`).join('') +
+    (curOwner && !teamOpts.includes(curOwner) ? `<option value="${escHtml(curOwner)}" selected>⚠ ${escHtml(curOwner)} (non-team)</option>` : '');
+
+  document.getElementById('qe_due').value = item.dueDate || '';
+
+  // Status options
+  const statusSel = document.getElementById('qe_status');
+  const taskStatuses  = ['Not Started','In Progress','At Risk','Done','Blocked','On Hold'];
+  const aiStatuses    = ['Open','In Progress','Done','Blocked'];
+  const statuses = isAi ? aiStatuses : taskStatuses;
+  statusSel.innerHTML = statuses.map(s => `<option value="${s}" ${item.status===s?'selected':''}>${s}</option>`).join('');
+
+  // Priority (AI only)
+  const priWrap = document.getElementById('qe_priority_wrap');
+  priWrap.style.display = isAi ? '' : 'none';
+  if (isAi) document.getElementById('qe_priority').value = item.priority || 'Medium';
+
+  document.getElementById('qe_notes').value = item.notes || '';
+
+  // Risk block (tasks only — AIs use priority instead)
+  const riskWrap = document.getElementById('qe_risk_wrap');
+  riskWrap.style.display = isAi ? 'none' : '';
+  if (!isAi) {
+    document.getElementById('qe_risk_flag').checked = !!item.flaggedRisk;
+    document.getElementById('qe_risk_detail_wrap').style.display = item.flaggedRisk ? 'block' : 'none';
+    document.getElementById('qe_risk_detail').value = item.riskDetail || '';
+  }
+
+  document.getElementById('qe_change_log').style.display = 'none';
+  document.getElementById('qe_status_line').textContent = '';
+  document.getElementById('quickEditModal').classList.add('open');
+}
+
+function saveQuickEdit() {
+  const ctx = window._quickEditCtx;
+  if (!ctx) return;
+  const isAi = ctx.kind === 'ai';
+  const list = isAi ? project.actionItems : project.tasks;
+  const item = (list || []).find(x => x.id === ctx.id);
+  if (!item) { showToast('Item missing.', 'error'); return; }
+  const orig = ctx.original;
+
+  const newOwner  = document.getElementById('qe_owner').value;
+  const newDue    = document.getElementById('qe_due').value;
+  const newStatus = document.getElementById('qe_status').value;
+  const newPri    = isAi ? document.getElementById('qe_priority').value : null;
+  const newNotes  = document.getElementById('qe_notes').value;
+  const newFlag   = isAi ? false : document.getElementById('qe_risk_flag').checked;
+  const newRiskD  = isAi ? '' : document.getElementById('qe_risk_detail').value.trim();
+
+  const changes = [];
+  // Owner change — require reason if changing from an existing owner
+  if (newOwner !== (orig.owner || '')) {
+    if (orig.owner && newOwner) {
+      const reason = prompt(`Changing owner: ${orig.owner} → ${newOwner}\n\nWhy is this changing? (Optional — blank to skip)`, '');
+      if (reason === null) return;
+      if (reason.trim()) changes.push(`Owner ${orig.owner} → ${newOwner}: ${reason.trim()}`);
+    }
+    item.owner = newOwner;
+  }
+  // Due date change — require reason if changing from an existing date
+  if (newDue !== (orig.dueDate || '')) {
+    if (orig.dueDate && newDue) {
+      const reason = prompt(`Changing due date: ${orig.dueDate} → ${newDue}\n\nWhy is this changing? (Optional — blank to skip)`, '');
+      if (reason === null) return;
+      if (reason.trim()) changes.push(`Date moved ${orig.dueDate} → ${newDue}: ${reason.trim()}`);
+    }
+    item.dueDate = newDue;
+  }
+  if (newStatus !== orig.status) { item.status = newStatus; changes.push(`Status: ${orig.status||'—'} → ${newStatus}`); }
+  if (isAi && newPri !== orig.priority) { item.priority = newPri; changes.push(`Priority: ${orig.priority||'—'} → ${newPri}`); }
+
+  // Notes — append change log to existing notes if there are changes; also keep user's edits
+  let mergedNotes = newNotes;
+  if (changes.length) {
+    const stamp = `[${new Date().toISOString().slice(0,10)}] ` + changes.join(' · ');
+    mergedNotes = (newNotes ? newNotes + '\n' : '') + stamp;
+  }
+  item.notes = mergedNotes;
+
+  if (!isAi) {
+    item.flaggedRisk = newFlag;
+    item.riskDetail = newFlag ? newRiskD : '';
+  }
+  item.updatedAt = new Date().toISOString();
+  if (newStatus === 'Done' && !item.completedAt) item.completedAt = new Date().toISOString();
+  if (newStatus !== 'Done') item.completedAt = null;
+
+  if (typeof recomputeMilestoneDates === 'function') recomputeMilestoneDates();
+  if (typeof refreshAfterOwnerChange === 'function') refreshAfterOwnerChange();
+  triggerAutoSave();
+
+  document.getElementById('qe_status_line').textContent = '✓ Saved.';
+  document.getElementById('qe_status_line').style.color = 'var(--green)';
+  showToast('✓ Updated.');
+  setTimeout(() => closeModal('quickEditModal'), 500);
+}
+
+// ── Auto-recompute milestone target dates from latest child due date ──
+// For each milestone, set its `date` to the max due-date among assigned
+// tasks + action items. Skips milestones whose children all lack dueDate.
+function recomputeMilestoneDates() {
+  if (!project || !Array.isArray(project.milestones)) return;
+  let changed = false;
+  project.milestones.forEach(m => {
+    const taskDates = (project.tasks || []).filter(t => t.milestoneId === m.id && t.dueDate).map(t => t.dueDate);
+    const aiDates   = (project.actionItems || []).filter(a => a.milestoneId === m.id && a.dueDate).map(a => a.dueDate);
+    const all = [...taskDates, ...aiDates].sort();
+    if (!all.length) return;
+    const latest = all[all.length - 1];
+    if (m.date !== latest) {
+      m.date = latest;
+      m.autoDated = true;
+      changed = true;
+    }
+  });
+  return changed;
 }
 
 // ── Milestone collapse / expand state ──────────────────────────
@@ -5475,7 +5753,7 @@ function renderMilestones() {
     return mTasks.map((t, i) => {
       const isPastDue = t.dueDate && t.status !== 'Done' && new Date(t.dueDate+'T00:00:00').getTime() < todayMs2;
       const rowBg = t.flaggedRisk ? 'background:#FFF0F0;' : isPastDue ? 'background:#FFF5F5;' : '';
-      return `<tr style="border-bottom:1px solid var(--border);${rowBg}">
+      return `<tr id="planTask${t.id}" style="border-bottom:1px solid var(--border);${rowBg}">
         <td style="padding:6px 8px;color:var(--text-secondary);font-size:12px;">${i+1}</td>
         <td class="editable" onclick="editTaskField(${t.id},'task',this)" style="padding:6px 8px;font-weight:500;">
           ${t.task||'<span style="color:var(--text-secondary);font-style:italic;">Click to add…</span>'}
@@ -5527,7 +5805,7 @@ function renderMilestones() {
       const isDone = a.status === 'Done';
       const duePast = a.dueDate && !isDone && new Date(a.dueDate+'T00:00:00').getTime() < todayMs;
       const pcfg = AI_PRIORITY_CONFIG[a.priority]||AI_PRIORITY_CONFIG.Medium;
-      return `<tr style="border-bottom:1px solid var(--border);${isDone?'opacity:.45;':''}${duePast?'background:#FFF5F5;':''}">
+      return `<tr id="planAi${a.id}" style="border-bottom:1px solid var(--border);${isDone?'opacity:.45;':''}${duePast?'background:#FFF5F5;':''}">
         <td style="padding:6px 8px;text-align:center;">
           <input type="checkbox" ${isDone?'checked':''} onchange="toggleAiDone(${a.id})" style="width:14px;height:14px;cursor:pointer;">
         </td>
@@ -5822,6 +6100,23 @@ function addActionItem() {
 function updateAiField(id, field, value) {
   const ai=(project.actionItems||[]).find(x=>x.id===id);
   if(ai) {
+    // Reason prompt for due-date / owner changes on action items
+    if ((field === 'dueDate' || field === 'owner') && ai[field] && ai[field] !== value && value) {
+      const label = field === 'dueDate' ? 'due date' : 'owner';
+      const reason = prompt(
+        `Changing ${label} on action item:\n"${ai.item || 'Untitled'}"\n  from: ${ai[field]}\n  to:   ${value}\n\nWhy is this changing? (Optional — leave blank to skip)`,
+        ''
+      );
+      if (reason === null) {
+        if (typeof renderMilestones === 'function') renderMilestones();
+        return;
+      }
+      if (reason.trim()) {
+        const tag = field === 'dueDate' ? `Date moved ${ai[field]} → ${value}` : `Owner changed ${ai[field]} → ${value}`;
+        const entry = `[${new Date().toISOString().slice(0,10)}] ${tag}: ${reason.trim()}`;
+        ai.notes = (ai.notes ? ai.notes + '\n' : '') + entry;
+      }
+    }
     ai[field]=value;
     ai.updatedAt = new Date().toISOString();
     // Stamp completedAt when transitioning to Done (for digest "last 7d" filter)
@@ -5838,6 +6133,7 @@ function updateAiField(id, field, value) {
   }
   // Re-render so past-due badges + priority color updates
   if (field === 'dueDate' || field === 'priority' || field === 'status') {
+    if (field === 'dueDate' && typeof recomputeMilestoneDates === 'function') recomputeMilestoneDates();
     if (typeof renderMilestones === 'function') renderMilestones();
     if (typeof renderActionItems === 'function') renderActionItems();
     if (typeof updateDashboard === 'function') updateDashboard();
@@ -6077,6 +6373,24 @@ function editTaskField(id, field, cell) {
 function updateTaskField(id, field, value) {
   const task = project.tasks.find(t => t.id === id);
   if (task) {
+    // For dueDate or owner changes from an existing value, prompt for a reason and log to notes
+    if ((field === 'dueDate' || field === 'owner') && task[field] && task[field] !== value && value) {
+      const label = field === 'dueDate' ? 'due date' : 'owner';
+      const reason = prompt(
+        `Changing ${label} on:\n"${task.task || 'Untitled task'}"\n  from: ${task[field]}\n  to:   ${value}\n\nWhy is this changing? (Optional — leave blank to skip)`,
+        ''
+      );
+      if (reason === null) {
+        // User cancelled — revert by re-rendering
+        if (typeof renderMilestones === 'function') renderMilestones();
+        return;
+      }
+      if (reason.trim()) {
+        const tag = field === 'dueDate' ? `Date moved ${task[field]} → ${value}` : `Owner changed ${task[field]} → ${value}`;
+        const entry = `[${new Date().toISOString().slice(0,10)}] ${tag}: ${reason.trim()}`;
+        task.notes = (task.notes ? task.notes + '\n' : '') + entry;
+      }
+    }
     task[field] = value;
     task.updatedAt = new Date().toISOString();
     // Stamp completedAt when transitioning to Done (for digest "last 7d" filter)
@@ -6094,6 +6408,7 @@ function updateTaskField(id, field, value) {
   }
   // Re-render the Plan view so past-due / "Xd overdue" badges recompute
   if (field === 'dueDate' || field === 'status' || field === 'flaggedRisk') {
+    if (field === 'dueDate' && typeof recomputeMilestoneDates === 'function') recomputeMilestoneDates();
     if (typeof renderMilestones === 'function') renderMilestones();
     if (typeof renderTasks === 'function')      renderTasks();
   }
@@ -6609,12 +6924,15 @@ function renderPmAiFindings(r) {
       `).join('') : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;">No gaps detected.</div>'}
     </div>
 
-    <!-- Suggested actions -->
+    <!-- Suggested actions — each one becomes addable to the plan -->
     <div>
       <div style="font-size:12px;font-weight:800;color:var(--gray-dark);margin-bottom:6px;">💡 Suggested Actions</div>
-      ${sugs.length ? `<ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.6;color:var(--gray-dark);">
-        ${sugs.map(s => `<li style="margin:3px 0;">${escHtml(s)}</li>`).join('')}
-      </ul>` : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;">No specific recommendations.</div>'}
+      ${sugs.length ? sugs.map((s, sidx) => `
+        <div id="pm_sug_${sidx}" style="display:flex;align-items:flex-start;gap:8px;padding:6px 10px;background:#fff;border:1px solid var(--border);border-left:3px solid var(--purple);border-radius:6px;margin-bottom:5px;font-size:12px;">
+          <span style="color:var(--purple);font-weight:700;flex-shrink:0;">${sidx+1}.</span>
+          <span style="flex:1;color:var(--gray-dark);">${escHtml(s)}</span>
+          <button class="btn btn-primary btn-sm" style="font-size:10px;padding:3px 8px;background:var(--purple);" onclick='pmAiAddSuggestionToPlan(${sidx})' title="Add as a task assigned to Project Owner">＋ Add to Plan</button>
+        </div>`).join('') : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;">No specific recommendations.</div>'}
     </div>
 
     ${renderSlackCandidatesBlock(r.slackCandidates)}
@@ -6655,6 +6973,62 @@ function renderSlackCandidatesBlock(sc) {
       <button class="btn btn-primary btn-sm" style="background:#4A154B;font-size:11px;width:100%;" onclick='pmAiApplySlack(${JSON.stringify({tasks:ts,decisions:ds,risks:rs})})'>✓ Add Checked Items to Project</button>
     </div>
   </div>`;
+}
+
+// Add a single AI suggestion as a task assigned to the project owner.
+// Lives under a "📌 Project Owner Items" milestone (auto-creates if missing).
+function pmAiAddSuggestionToPlan(sidx) {
+  const last = window._pmAiLastFindings;
+  if (!last || !Array.isArray(last.suggestions) || !last.suggestions[sidx]) return;
+  const text = last.suggestions[sidx];
+
+  // Ensure a "Project Owner Items" milestone exists at the bottom
+  if (!project.milestones) project.milestones = [];
+  let ownerMs = project.milestones.find(m => m.name === '📌 Project Owner Items');
+  if (!ownerMs) {
+    const today = new Date().toISOString().split('T')[0];
+    ownerMs = {
+      id: (typeof milestoneIdCounter !== 'undefined' ? milestoneIdCounter++ : Date.now()),
+      name: '📌 Project Owner Items',
+      date: project.dueDate || today,
+      status: 'Not Started',
+      notes: 'Auto-created bucket for items owned by the project lead (not tied to a specific phase).',
+      assignedTo: [],
+    };
+    project.milestones.push(ownerMs);
+  }
+
+  // Determine owner string — use the project lead, fall back to "Senior Leadership Owner"
+  const ownerName = (project.lead || '').trim() || 'Senior Leadership Owner';
+
+  // Add the task
+  project.tasks = project.tasks || [];
+  project.tasks.push({
+    id: (typeof taskIdCounter !== 'undefined' ? taskIdCounter++ : Date.now()),
+    milestoneId: ownerMs.id,
+    category: 'Owner',
+    task: text,
+    owner: ownerName,
+    dueDate: '',
+    status: 'Not Started',
+    notes: 'Added from PM AI suggested actions on ' + new Date().toISOString().split('T')[0],
+    flaggedRisk: false,
+    riskDetail: '',
+    createdAt: new Date().toISOString(),
+  });
+
+  if (typeof recomputeMilestoneDates === 'function') recomputeMilestoneDates();
+  if (typeof refreshAfterOwnerChange === 'function') refreshAfterOwnerChange();
+  triggerAutoSave();
+
+  // Visual feedback in the modal
+  const row = document.getElementById('pm_sug_' + sidx);
+  if (row) {
+    row.style.background = '#D1FAE5';
+    row.style.borderLeftColor = '#10B981';
+    row.innerHTML += '<div style="width:100%;font-size:10px;color:#065F46;font-weight:700;margin-top:4px;">✓ Added to Project Owner Items</div>';
+  }
+  showToast('✓ Added to Plan — Project Owner Items');
 }
 
 function pmAiApplySlack(data) {
@@ -7960,10 +8334,10 @@ function renderWorkstreams() {
         <!-- Two columns: top tasks · top AIs -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
           <div>
-            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Top open tasks</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Top open tasks <span style="font-weight:400;text-transform:none;letter-spacing:0;">(click to open in Plan)</span></div>
             ${topTasks.length ? topTasks.map(t => {
               const past = t.dueDate && new Date(t.dueDate+'T00:00:00').getTime() < todayMs;
-              return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border);">
+              return `<div onclick="focusItemOnPlan('task',${t.id})" style="display:flex;align-items:center;gap:8px;padding:4px 6px;font-size:12px;border-bottom:1px solid var(--border);cursor:pointer;border-radius:4px;" onmouseenter="this.style.background='var(--gray-light)'" onmouseleave="this.style.background=''">
                 <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${t.flaggedRisk?'var(--red)':past?'var(--orange)':color};flex-shrink:0;"></span>
                 <span style="flex:1;color:var(--text);">${escHtml(t.task||'—')}</span>
                 <span style="color:${past?'var(--red)':'var(--text-secondary)'};font-size:11px;font-weight:${past?'700':'400'};">${t.dueDate||'—'}</span>
@@ -7971,10 +8345,10 @@ function renderWorkstreams() {
             }).join('') : '<div style="font-size:12px;color:var(--text-secondary);font-style:italic;padding:6px 0;">No open tasks</div>'}
           </div>
           <div>
-            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Top open action items</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Top open action items <span style="font-weight:400;text-transform:none;letter-spacing:0;">(click to open in Plan)</span></div>
             ${topAIs.length ? topAIs.map(a => {
               const past = a.dueDate && new Date(a.dueDate+'T00:00:00').getTime() < todayMs;
-              return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border);">
+              return `<div onclick="focusItemOnPlan('ai',${a.id})" style="display:flex;align-items:center;gap:8px;padding:4px 6px;font-size:12px;border-bottom:1px solid var(--border);cursor:pointer;border-radius:4px;" onmouseenter="this.style.background='var(--gray-light)'" onmouseleave="this.style.background=''">
                 <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${a.priority==='Critical'?'var(--red)':a.priority==='High'?'var(--orange)':color};flex-shrink:0;"></span>
                 <span style="flex:1;color:var(--text);">${escHtml(a.item||'—')}</span>
                 <span style="color:${past?'var(--red)':'var(--text-secondary)'};font-size:11px;font-weight:${past?'700':'400'};">${a.dueDate||'—'}</span>
