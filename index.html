@@ -390,23 +390,19 @@
     <!-- Stats -->
     <div class="stats-grid" id="dashStats"></div>
 
-    <!-- Status breakdown + Stakeholders side by side -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-      <div class="card">
-        <div class="card-header"><div class="card-title">📋 Tasks by Status</div></div>
-        <div class="card-body" id="dashTaskStatus"></div>
-      </div>
-      <div class="card">
-        <div class="card-header"><div class="card-title">👥 Stakeholder Plan Status</div></div>
-        <div class="card-body" id="dashStakeholders"></div>
-      </div>
+    <!-- Tasks by Status (full width — Stakeholder Plan Status card removed; that lives on Setup) -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">📋 Tasks by Status</div></div>
+      <div class="card-body" id="dashTaskStatus"></div>
     </div>
+    <!-- Hidden stub kept so render functions targeting #dashStakeholders don't error -->
+    <div id="dashStakeholders" style="display:none;"></div>
 
     <!-- Team Roster by Team -->
     <div class="card">
       <div class="card-header">
         <div class="card-title">👥 Project Owners by Team</div>
-        <button class="btn btn-sm btn-secondary" onclick="openPeopleModal()">Manage People →</button>
+        <button class="btn btn-sm btn-secondary" onclick="dashboardEditStakeholders()" title="Jump to Project Setup tab and scroll to the Stakeholder Plan">✏️ Edit in Setup →</button>
       </div>
       <div class="card-body" id="dashTeamRoster"></div>
     </div>
@@ -7052,6 +7048,23 @@ async function sendProjectUpdateSlack() {
   } catch (e) {
     setAiStatus('proj_update_status', '✗ Slack failed: ' + e.message, 'var(--red)');
   }
+}
+
+// Edit in Setup — jumps from the dashboard's "Project Owners by Team" card to
+// the Stakeholder Plan grid on the Project Setup tab.
+function dashboardEditStakeholders() {
+  switchTab('setup');
+  setTimeout(() => {
+    const grid = document.getElementById('stakeholderGrid');
+    if (grid) {
+      grid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Flash the section so it's obvious where they landed
+      const orig = grid.style.background;
+      grid.style.transition = 'background .25s';
+      grid.style.background = '#F3E8FF';
+      setTimeout(() => { grid.style.background = orig; }, 1800);
+    }
+  }, 220);
 }
 
 // Manage People chooser — splits to Stakeholders or Email Recipients
